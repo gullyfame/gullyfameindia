@@ -46,7 +46,38 @@ gfm/
 |   ├── gully-fame-mobile # The Mobile App
 |   ├── videoeditor # The Video Editor to edit reels
 |
-├── node_modules # Yarn will bundle any node_modules that would work in the root directory, other packages will be in each project's local           node_modules
+├── node_modules # Yarn will bundle any node_modules that would work in the root directory, other packages will be in each project's local node_modules
+├── packages # Shared utilities and components (video-editor-core, etc.)
+|
+└── See ARCHITECTURE.md for detailed technical design and CONTRIBUTING.md for development guidelines
+```
+
+## Quick Start
+
+**For gully-fame-mobile (main app with video editor)**:
+```bash
+npm start --prefix apps/gully-fame-mobile
+```
+
+**For video editor development**:
+```bash
+npm start --prefix apps/videoeditor
+```
+
+**For admin panel**:
+```bash
+npm start --prefix apps/gully-fame-admin
+```
+
+## Documentation
+
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Technical architecture and design
+- **[DEVELOPMENT_ROADMAP.md](./DEVELOPMENT_ROADMAP.md)** - Feature implementation roadmap
+- **[CONTRIBUTING.md](./CONTRIBUTING.md)** - Development guidelines and standards
+
+## License
+
+Proprietary - GullyFame
 ├── .gitattributes # Enforces LF end-of-line to prevent hydration errors.
 ├── .gitignore
 ├── app.json
@@ -68,3 +99,21 @@ This will connect you to the API so the app will actually load.
 ## Final Notes
 
 The new added plugin, withFFMPEGResolution.js is included in Mobile App and Video Editor app since the original ffmpeg-kit-react-native has been retired by the authors. The plugin injects some gradle code into /android/build.gradle so that the project connects to the community fork of ffmpeg-kit-community by salahawad
+=======
+## Hi there 👋
+
+<!--
+**gullyfameindia/GullyfameIndia** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
+
+Here are some ideas to get you started:
+
+- 🔭 I’m currently working on ...
+- 🌱 I’m currently learning ...
+- 👯 I’m looking to collaborate on ...
+- 🤔 I’m looking for help with ...
+- 💬 Ask me about ...
+- 📫 How to reach me: ...
+- 😄 Pronouns: ...
+- ⚡ Fun fact: ...
+-->
+>>>>>>> 4b8e10dc16a3d12e741676a8c151b2c6a86291db
