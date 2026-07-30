@@ -2,12 +2,19 @@
 const nextConfig = {
   reactStrictMode: true,
   typescript: {
-    // Ye line TypeScript errors ko build fail karne se rokegi
     ignoreBuildErrors: true,
   },
   eslint: {
-    // Ye line ESLint errors ko build fail karne se rokegi
     ignoreDuringBuilds: true,
+  },
+  // Yeh naya block add karo
+  async rewrites() {
+    return [
+      {
+        source: '/v1/api/:path*',
+        destination: 'https://gullyfame.com/v1/api/:path*',
+      },
+    ];
   },
 }
 

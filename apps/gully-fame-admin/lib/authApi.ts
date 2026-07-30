@@ -4,7 +4,7 @@ import type { ApiResponse } from './apiTypes';
 
 const BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
-  'http://103.194.228.68:3552/v1/api/';
+  'https://gullyfame.com/v1/api/';
 
 const TOKEN_KEY = 'gf_admin_token';
 const ADMIN_DATA_KEY = 'gf_admin_data';
