@@ -2,14 +2,15 @@
   "expo": {
     "name": "gully-fame-mobile",
     "slug": "gully-fame-mobile",
-    "owner": "sauravbhadauriya17",
     "version": "1.0.0",
+    "backgroundColor": "#3C2610", 
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "gullyfamemobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "backgroundColor": "#3C2610",
       "supportsTablet": true,
       "bundleIdentifier": "com.gullyfame.mobile",
       "infoPlist": {
@@ -17,6 +18,7 @@
       }
     },
     "android": {
+      "backgroundColor": "#3C2610",
       "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -36,7 +38,10 @@
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
-    "plugins": [],
+    "plugins": [
+      "expo-router",
+      "@react-native-google-signin/google-signin"
+    ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": false
@@ -46,8 +51,9 @@
         "origin": false
       },
       "eas": {
-        "projectId": "0e605ece-f6ff-4df4-b81e-3c3709a9c379"
+        "projectId": "f5294312-557c-428a-a89b-12a7193444b5"
       }
-    }
+    },
+    "owner": "gullyfameindia"
   }
 }

@@ -1,3 +1,5 @@
+// File Route: apps/gully-fame-mobile/app/(main)/leaderboard/[id].tsx
+
 import InfiniteScrollingLeaderboard from "@/components/InfiniteScrollingLeaderboard/InfiniteScrollingLeaderboard";
 import { MOCK_LEADERBOARD_DATA } from "@/data/leaderboard/mockData";
 import { View, Text, TouchableOpacity, StatusBar } from "react-native";
@@ -5,6 +7,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { leaderboardScreenStyles as styles } from "@/styles/leaderboardScreenStyles";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { BackIcon } from "@/icons";
+// Naya Import: Gift icon ke liye Ionicons use kar rahe hain
+import { Ionicons } from '@expo/vector-icons';
 
 function LeaderboardScreen() {
     const router = useRouter();
@@ -41,7 +45,14 @@ function LeaderboardScreen() {
                         </Text>
                     </View>
 
-                    <View style={styles.placeholder} />
+                    {/* Placeholder ko hata kar yahan 'Invite & Earn' link laga diya hai */}
+                    <TouchableOpacity
+                        style={styles.backButton}
+                        onPress={() => router.push("/(main)/invite-friend" as any)}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="gift-outline" size={24} color="#EC9A15" />
+                    </TouchableOpacity>
                 </View>
 
                 {/* Live Status Indicator */}

@@ -5,7 +5,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { View, ActivityIndicator, StatusBar } from "react-native";
-import { getProfileRoute, DEFAULT_ROLE } from "./shared/profileTypes";
+import { getProfileRoute, DEFAULT_ROLE } from "@/components/profile/shared/profileTypes";
 
 export default function ProfileRouter() {
   const params = useLocalSearchParams();

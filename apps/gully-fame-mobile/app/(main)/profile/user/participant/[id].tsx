@@ -22,8 +22,8 @@ import BottomNav from "@components/layout/BottomNav";
 import { BackIcon } from "@/icons";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Path, G } from "react-native-svg";
-import { useOtherUserProfile } from "../../shared/profileHooks";
-import { StatsSection, UserInfoSection } from "../../shared/ProfileComponents";
+import { useOtherUserProfile } from "@/components/profile/shared/profileHooks";
+import { StatsSection, UserInfoSection } from "@/components/profile/shared/ProfileComponents";
 import {
   UserIconSVG,
   HomeIconSVG,
@@ -336,7 +336,7 @@ export default function UserParticipantProfile() {
                 }
               }}
             >
-              <Text style={styles.tipButtonText}>Tip</Text>
+              <Text style={styles.tipButtonText}>Support</Text>
             </TouchableOpacity>
           </View>
 

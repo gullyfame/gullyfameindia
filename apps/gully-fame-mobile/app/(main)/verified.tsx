@@ -14,7 +14,7 @@ import { router } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import Svg, { Path, Circle } from "react-native-svg";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useOwnProfile } from "./profile/shared/profileHooks";
+import { useOwnProfile } from "@/components/profile/shared/profileHooks";
 import {
   BackIcon,
   CheckIcon,

@@ -1,249 +1,151 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Modal,
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
+  TouchableOpacity,
   SafeAreaView,
+  Alert,
   Animated,
 } from "react-native";
-import Svg, { Path, Circle } from "react-native-svg";
 import { Audio } from "expo-av";
-
-interface VoiceRecording {
-  id: string;
-  name: string;
-  uri: string;
-  duration: number;
-}
+import Svg, { Path, Circle } from "react-native-svg";
+import type { VoiceOverlay } from "../types/voiceOverlay.types";
 
 interface VoiceRecorderModalProps {
   visible: boolean;
-  onSelect: (recording: VoiceRecording) => void;
   onClose: () => void;
+  onSave: (voiceOverlay: VoiceOverlay) => void;
+  startTime?: number;
 }
 
-/**
- * Voice Recorder Modal for recording user voice content
- * Similar to Instagram's voice recording feature
- */
-const VoiceRecorderModal: React.FC<VoiceRecorderModalProps> = ({ visible, onSelect, onClose }) => {
+const VoiceRecorderModal: React.FC<VoiceRecorderModalProps> = ({
+  visible,
+  onClose,
+  onSave,
+  startTime = 0,
+}) => {
   const [isRecording, setIsRecording] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [recordingDuration, setRecordingDuration] = useState(0);
-  const [currentRecording, setCurrentRecording] = useState<VoiceRecording | null>(null);
-
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [recordingUri, setRecordingUri] = useState<string | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
-  const soundRef = useRef<Audio.Sound | null>(null);
-  const animationRef = useRef(new Animated.Value(1)).current;
-  const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  // Cleanup when modal closes
-  React.useEffect(() => {
-    if (!visible) {
-      stopRecording();
-      stopPlayback();
+  useEffect(() => {
+    if (isRecording) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.2,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
     }
-  }, [visible]);
+  }, [isRecording, pulseAnim]);
 
-  const startRecording = useCallback(async () => {
+  const startRecording = async () => {
     try {
-      // Request permissions
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== "granted") {
-        alert("Permission to access microphone is required!");
+      const { granted } = await Audio.requestPermissionsAsync();
+      if (!granted) {
+        Alert.alert("Permission Required", "Microphone permission is required to record voice");
         return;
       }
 
-      // Configure audio mode
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
-        staysActiveInBackground: false,
         playsInSilentModeIOS: true,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
       });
 
-      // Start recording
       const recording = new Audio.Recording();
       await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       await recording.startAsync();
 
       recordingRef.current = recording;
       setIsRecording(true);
-      setRecordingDuration(0);
+      setRecordingTime(0);
 
-      // Start duration counter
-      durationIntervalRef.current = setInterval(() => {
-        setRecordingDuration((prev) => prev + 1);
+      timerRef.current = setInterval(() => {
+        setRecordingTime((prev) => prev + 1);
       }, 1000);
-
-      // Start pulse animation
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(animationRef, {
-            toValue: 1.2,
-            duration: 800,
-            useNativeDriver: true,
-          }),
-          Animated.timing(animationRef, {
-            toValue: 1,
-            duration: 800,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
     } catch (error) {
-      console.error("Error starting recording:", error);
+      Alert.alert("Error", "Failed to start recording");
+      console.error(error);
     }
-  }, []);
+  };
 
-  const pauseRecording = useCallback(async () => {
-    if (recordingRef.current && isRecording && !isPaused) {
-      try {
-        await recordingRef.current.pauseAsync();
-        setIsPaused(true);
-        if (durationIntervalRef.current) {
-          clearInterval(durationIntervalRef.current);
-        }
-        animationRef.stopAnimation();
-      } catch (error) {
-        console.error("Error pausing recording:", error);
+  const stopRecording = async () => {
+    try {
+      if (!recordingRef.current) return;
+
+      await recordingRef.current.stopAndUnloadAsync();
+      const uri = recordingRef.current.getURI();
+
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
       }
+
+      setIsRecording(false);
+      setRecordingUri(uri || null);
+      recordingRef.current = null;
+    } catch (error) {
+      Alert.alert("Error", "Failed to stop recording");
+      console.error(error);
     }
-  }, [isRecording, isPaused]);
+  };
 
-  const resumeRecording = useCallback(async () => {
-    if (recordingRef.current && isRecording && isPaused) {
-      try {
-        await recordingRef.current.startAsync();
-        setIsPaused(false);
-
-        // Resume duration counter
-        durationIntervalRef.current = setInterval(() => {
-          setRecordingDuration((prev) => prev + 1);
-        }, 1000);
-
-        // Resume pulse animation
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(animationRef, {
-              toValue: 1.2,
-              duration: 800,
-              useNativeDriver: true,
-            }),
-            Animated.timing(animationRef, {
-              toValue: 1,
-              duration: 800,
-              useNativeDriver: true,
-            }),
-          ])
-        ).start();
-      } catch (error) {
-        console.error("Error resuming recording:", error);
-      }
+  const handleSave = () => {
+    if (!recordingUri) {
+      Alert.alert("Error", "No recording available");
+      return;
     }
-  }, [isRecording, isPaused]);
 
-  const stopRecording = useCallback(async () => {
-    if (recordingRef.current) {
-      try {
-        await recordingRef.current.stopAndUnloadAsync();
-        const uri = recordingRef.current.getURI();
+    const voiceOverlay: VoiceOverlay = {
+      id: `voice-${Date.now()}`,
+      uri: recordingUri,
+      duration: recordingTime,
+      startTime,
+      volume: 1,
+      isMuted: false,
+    };
 
-        if (uri) {
-          const recording: VoiceRecording = {
-            id: `voice-${Date.now()}`,
-            name: `Voice Recording ${new Date().toLocaleTimeString()}`,
-            uri,
-            duration: recordingDuration,
-          };
-          setCurrentRecording(recording);
-        }
-
-        recordingRef.current = null;
-        setIsRecording(false);
-        setIsPaused(false);
-
-        if (durationIntervalRef.current) {
-          clearInterval(durationIntervalRef.current);
-        }
-
-        animationRef.stopAnimation();
-        animationRef.setValue(1);
-      } catch (error) {
-        console.error("Error stopping recording:", error);
-      }
-    }
-  }, [recordingDuration]);
-
-  const playRecording = useCallback(async () => {
-    if (currentRecording && !isPlaying) {
-      try {
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: currentRecording.uri },
-          { shouldPlay: true, volume: 1.0 }
-        );
-
-        soundRef.current = sound;
-        setIsPlaying(true);
-
-        sound.setOnPlaybackStatusUpdate((status) => {
-          if (status.isLoaded && status.didJustFinish) {
-            setIsPlaying(false);
-          }
-        });
-      } catch (error) {
-        console.error("Error playing recording:", error);
-      }
-    }
-  }, [currentRecording, isPlaying]);
-
-  const stopPlayback = useCallback(async () => {
-    if (soundRef.current) {
-      try {
-        await soundRef.current.stopAsync();
-        await soundRef.current.unloadAsync();
-        soundRef.current = null;
-        setIsPlaying(false);
-      } catch (error) {
-        console.warn("Error stopping playback:", error);
-      }
-    }
-  }, []);
-
-  const handleSelectRecording = useCallback(() => {
-    if (currentRecording) {
-      onSelect(currentRecording);
-      onClose();
-    }
-  }, [currentRecording, onSelect, onClose]);
-
-  const handleClose = useCallback(async () => {
-    await stopRecording();
-    await stopPlayback();
-    setCurrentRecording(null);
-    setRecordingDuration(0);
+    onSave(voiceOverlay);
+    handleReset();
     onClose();
-  }, [stopRecording, stopPlayback, onClose]);
+  };
 
-  const formatTime = (seconds: number): string => {
+  const handleReset = () => {
+    setRecordingTime(0);
+    setRecordingUri(null);
+    setIsRecording(false);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+  };
+
+  const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={handleClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={handleClose} style={styles.headerButton}>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
             <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
               <Path
-                d="M19 12H5M5 12L12 19M5 12L12 5"
+                d="M18 6L6 18M6 6l12 12"
                 stroke="#ffffff"
                 strokeWidth="2"
                 strokeLinecap="round"
@@ -251,122 +153,91 @@ const VoiceRecorderModal: React.FC<VoiceRecorderModalProps> = ({ visible, onSele
               />
             </Svg>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Voice Recorder</Text>
-          <View style={styles.headerButton} />
+          <Text style={styles.headerTitle}>Voice Recording</Text>
+          <View style={styles.closeButton} />
         </View>
 
-        {/* Recording Area */}
-        <View style={styles.recordingArea}>
-          {/* Waveform Visualization */}
-          <View style={styles.waveformContainer}>
-            <Text style={styles.instructionText}>
-              {!isRecording && !currentRecording && "Tap to start recording"}
-              {isRecording && !isPaused && "Recording..."}
-              {isRecording && isPaused && "Recording paused"}
-              {currentRecording && "Recording complete"}
+        {/* Content */}
+        <View style={styles.content}>
+          {/* Recording Indicator */}
+          <View style={styles.recordingContainer}>
+            <Animated.View
+              style={[
+                styles.recordingPulse,
+                {
+                  transform: [{ scale: pulseAnim }],
+                },
+              ]}
+            >
+              <View style={styles.recordingDot} />
+            </Animated.View>
+            <Text style={styles.recordingStatus}>
+              {isRecording ? "Recording..." : recordingUri ? "Recorded" : "Ready"}
             </Text>
           </View>
 
-          {/* Duration Display */}
-          <Text style={styles.durationText}>{formatTime(recordingDuration)}</Text>
+          {/* Timer */}
+          <Text style={styles.timer}>{formatTime(recordingTime)}</Text>
 
-          {/* Recording Button */}
-          <View style={styles.recordButtonContainer}>
-            {!isRecording && !currentRecording && (
-              <TouchableOpacity
-                style={styles.recordButton}
-                onPress={startRecording}
-                activeOpacity={0.8}
-              >
-                <Animated.View
-                  style={[styles.recordButtonInner, { transform: [{ scale: animationRef }] }]}
-                >
-                  <Svg width={32} height={32} viewBox="0 0 24 24" fill="none">
-                    <Circle cx="12" cy="12" r="8" fill="#ff4444" />
-                  </Svg>
-                </Animated.View>
+          {/* Waveform Placeholder */}
+          <View style={styles.waveformContainer}>
+            {Array.from({ length: 20 }).map((_, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.waveformBar,
+                  {
+                    height: isRecording
+                      ? Math.random() * 60 + 20
+                      : recordingUri
+                        ? Math.random() * 40 + 10
+                        : 10,
+                  },
+                ]}
+              />
+            ))}
+          </View>
+
+          {/* Controls */}
+          <View style={styles.controls}>
+            {!isRecording && !recordingUri && (
+              <TouchableOpacity style={styles.recordButton} onPress={startRecording}>
+                <Svg width={32} height={32} viewBox="0 0 24 24" fill="none">
+                  <Circle cx="12" cy="12" r="10" fill="#ec9a15" />
+                  <Circle cx="12" cy="12" r="6" fill="#ffffff" />
+                </Svg>
+                <Text style={styles.recordButtonText}>Start Recording</Text>
               </TouchableOpacity>
             )}
 
             {isRecording && (
-              <View style={styles.recordingControls}>
-                <TouchableOpacity
-                  style={styles.controlButton}
-                  onPress={isPaused ? resumeRecording : pauseRecording}
-                >
-                  <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-                    {isPaused ? (
-                      <Path d="M8 5v14l11-7L8 5z" fill="#ffffff" />
-                    ) : (
-                      <Path d="M6 4h4v16H6zM14 4h4v16h-4z" fill="#ffffff" />
-                    )}
-                  </Svg>
-                </TouchableOpacity>
-
-                <Animated.View
-                  style={[styles.recordingIndicator, { transform: [{ scale: animationRef }] }]}
-                >
-                  <View style={styles.recordingDot} />
-                </Animated.View>
-
-                <TouchableOpacity style={styles.controlButton} onPress={stopRecording}>
-                  <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-                    <Path d="M6 6h12v12H6z" fill="#ffffff" />
-                  </Svg>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity style={styles.stopButton} onPress={stopRecording}>
+                <Svg width={32} height={32} viewBox="0 0 24 24" fill="none">
+                  <Path d="M6 4h12v16H6z" fill="#ff4444" />
+                </Svg>
+                <Text style={styles.stopButtonText}>Stop Recording</Text>
+              </TouchableOpacity>
             )}
 
-            {currentRecording && (
-              <View style={styles.playbackControls}>
-                <TouchableOpacity
-                  style={styles.playButton}
-                  onPress={isPlaying ? stopPlayback : playRecording}
-                >
-                  <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-                    {isPlaying ? (
-                      <Path d="M6 4h4v16H6zM14 4h4v16h-4z" fill="#ffffff" />
-                    ) : (
-                      <Path d="M8 5v14l11-7L8 5z" fill="#ffffff" />
-                    )}
-                  </Svg>
+            {recordingUri && !isRecording && (
+              <View style={styles.actionButtons}>
+                <TouchableOpacity style={styles.resetButton} onPress={handleReset}>
+                  <Text style={styles.resetButtonText}>Re-record</Text>
                 </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.newRecordingButton}
-                  onPress={() => {
-                    setCurrentRecording(null);
-                    setRecordingDuration(0);
-                  }}
-                >
-                  <Text style={styles.newRecordingText}>New Recording</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.useRecordingButton} onPress={handleSelectRecording}>
-                  <Text style={styles.useRecordingText}>Use This</Text>
+                <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+                  <Text style={styles.saveButtonText}>Save</Text>
                 </TouchableOpacity>
               </View>
             )}
           </View>
 
-          {/* Recording Info */}
-          {currentRecording && (
-            <View style={styles.recordingInfo}>
-              <Text style={styles.recordingName}>{currentRecording.name}</Text>
-              <Text style={styles.recordingDuration}>
-                Duration: {formatTime(currentRecording.duration)}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Tips */}
-        <View style={styles.tipsContainer}>
-          <Text style={styles.tipsTitle}>Recording Tips:</Text>
-          <Text style={styles.tipText}>• Hold phone close to your mouth</Text>
-          <Text style={styles.tipText}>• Speak clearly and at normal volume</Text>
-          <Text style={styles.tipText}>• Record in a quiet environment</Text>
-          <Text style={styles.tipText}>• Maximum recording time: 60 seconds</Text>
+          {/* Info */}
+          <View style={styles.infoBox}>
+            <Text style={styles.infoText}>
+              💡 Tip: Record your voice and it will be added to the timeline at the current
+              position.
+            </Text>
+          </View>
         </View>
       </SafeAreaView>
     </Modal>
@@ -376,20 +247,20 @@ const VoiceRecorderModal: React.FC<VoiceRecorderModalProps> = ({ visible, onSele
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#000000",
+    backgroundColor: "#1a1a1a",
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255, 255, 255, 0.1)",
   },
-  headerButton: {
-    width: 40,
-    height: 40,
+  closeButton: {
+    width: 44,
+    height: 44,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -398,152 +269,134 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
   },
-  recordingArea: {
+  content: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 32,
+    paddingHorizontal: 24,
   },
-  waveformContainer: {
-    height: 100,
-    justifyContent: "center",
+  recordingContainer: {
     alignItems: "center",
     marginBottom: 32,
   },
-  instructionText: {
-    color: "#ffffff",
-    fontSize: 18,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  durationText: {
-    color: "#ec9a15",
-    fontSize: 48,
-    fontWeight: "700",
-    marginBottom: 48,
-    fontFamily: "monospace",
-  },
-  recordButtonContainer: {
-    alignItems: "center",
-    marginBottom: 48,
-  },
-  recordButton: {
+  recordingPulse: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: "rgba(255, 68, 68, 0.2)",
+    backgroundColor: "rgba(236, 154, 21, 0.2)",
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 4,
-    borderColor: "#ff4444",
-  },
-  recordButtonInner: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "#ff4444",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  recordingControls: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 24,
-  },
-  controlButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  recordingIndicator: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "rgba(255, 68, 68, 0.2)",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#ff4444",
+    marginBottom: 16,
   },
   recordingDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: "#ff4444",
-  },
-  playbackControls: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-  },
-  playButton: {
     width: 60,
     height: 60,
     borderRadius: 30,
     backgroundColor: "#ec9a15",
-    justifyContent: "center",
-    alignItems: "center",
   },
-  newRecordingButton: {
+  recordingStatus: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  timer: {
+    color: "#ec9a15",
+    fontSize: 48,
+    fontWeight: "700",
+    fontFamily: "monospace",
+    marginBottom: 32,
+  },
+  waveformContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    height: 100,
+    marginBottom: 32,
+  },
+  waveformBar: {
+    width: 3,
+    backgroundColor: "#ec9a15",
+    borderRadius: 2,
+  },
+  controls: {
+    width: "100%",
+    marginBottom: 32,
+  },
+  recordButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    backgroundColor: "#ec9a15",
+    borderRadius: 24,
+  },
+  recordButtonText: {
+    color: "#000000",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  stopButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    backgroundColor: "#ff4444",
+    borderRadius: 24,
+  },
+  stopButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  actionButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  resetButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
     backgroundColor: "rgba(255, 255, 255, 0.1)",
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.3)",
+    borderColor: "rgba(255, 255, 255, 0.2)",
+    alignItems: "center",
   },
-  newRecordingText: {
+  resetButtonText: {
     color: "#ffffff",
     fontSize: 14,
     fontWeight: "600",
   },
-  useRecordingButton: {
+  saveButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
     backgroundColor: "#ec9a15",
     borderRadius: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  useRecordingText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  recordingInfo: {
     alignItems: "center",
-    marginTop: 24,
   },
-  recordingName: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  recordingDuration: {
-    color: "#888888",
+  saveButtonText: {
+    color: "#000000",
     fontSize: 14,
-  },
-  tipsContainer: {
-    backgroundColor: "rgba(236, 154, 21, 0.1)",
-    borderRadius: 16,
-    padding: 20,
-    margin: 16,
-    borderWidth: 1,
-    borderColor: "rgba(236, 154, 21, 0.2)",
-  },
-  tipsTitle: {
-    color: "#ec9a15",
-    fontSize: 16,
     fontWeight: "700",
-    marginBottom: 12,
   },
-  tipText: {
-    color: "#ffffff",
-    fontSize: 14,
-    marginBottom: 6,
-    lineHeight: 20,
+  infoBox: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "rgba(236, 154, 21, 0.1)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(236, 154, 21, 0.3)",
+  },
+  infoText: {
+    color: "rgba(255, 255, 255, 0.7)",
+    fontSize: 13,
+    lineHeight: 18,
   },
 });
 

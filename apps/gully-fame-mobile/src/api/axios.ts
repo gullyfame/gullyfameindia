@@ -5,20 +5,20 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 // Get base URL from env, with fallback to production server
 export let BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
-// ✅ KIRO: Edit by kiro - Changed fallback from localhost to production server for build compatibility
-// ❌ OLD CODE - LOCALHOST FALLBACK (doesn't work in build)
+// ✅ KIRO: Edit by kiro - Changed fallback to new production deployment URL
+// ❌ OLD CODE - OLD IP FALLBACK
 // if (!BASE_URL) {
-//   BASE_URL = "http://localhost:3552/v1/api/";
+//   BASE_URL = "http://103.194.228.68:3552/v1/api/";
 //   console.warn(
-//     "[axios] Using localhost as base URL. To change, set EXPO_PUBLIC_API_BASE_URL in .env",
+//     "[axios] Using production server as base URL. To change, set EXPO_PUBLIC_API_BASE_URL in .env"
 //   );
 // }
 
-// ✅ NEW CODE - PRODUCTION SERVER FALLBACK (works in build)
+// ✅ NEW CODE - UPDATED PRODUCTION DEPLOYMENT URL
 if (!BASE_URL) {
-  BASE_URL = "http://103.194.228.68:3552/v1/api/";
+  BASE_URL = "https://gullyfame.com/v1/api/";
   console.warn(
-    "[axios] Using production server as base URL. To change, set EXPO_PUBLIC_API_BASE_URL in .env"
+    "[axios] Using production deployment as base URL. To change, set EXPO_PUBLIC_API_BASE_URL in .env"
   );
 }
 

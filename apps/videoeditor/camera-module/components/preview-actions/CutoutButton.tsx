@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   TouchableOpacity,
   View,
@@ -7,7 +7,7 @@ import {
   Modal,
   SafeAreaView,
   ScrollView,
-  Slider,
+  PanResponder,
 } from "react-native";
 import Svg, { Path, Circle, Rect } from "react-native-svg";
 import type { Cutout } from "../../types/voiceOverlay.types";
@@ -16,6 +16,66 @@ interface CutoutButtonProps {
   onPress?: () => void;
   onCutoutAdd?: (cutout: Cutout) => void;
 }
+
+// 🎛️ Reusable Custom Slider utilizing native PanResponder for fluid sliding matrix
+interface CustomSliderProps {
+  minimumValue: number;
+  maximumValue: number;
+  value: number;
+  onValueChange: (value: number) => void;
+}
+
+const CustomSlider: React.FC<CustomSliderProps> = ({
+  minimumValue,
+  maximumValue,
+  value,
+  onValueChange,
+}) => {
+  const [trackLayout, setTrackLayout] = useState({ x: 0, width: 0 });
+
+  const updateValue = (pageX: number) => {
+    if (trackLayout.width <= 0) return;
+
+    let touchX = pageX - trackLayout.x;
+    let percentage = Math.max(0, Math.min(1, touchX / trackLayout.width));
+    let calculatedValue = minimumValue + percentage * (maximumValue - minimumValue);
+    console.log(`🎛️ Cutout Slider: pageX=${pageX}, trackX=${trackLayout.x}, touchX=${touchX}, percentage=${percentage.toFixed(2)}, value=${calculatedValue.toFixed(1)}`);
+    onValueChange(calculatedValue);
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        updateValue(evt.nativeEvent.pageX);
+      },
+      onPanResponderMove: (evt) => {
+        updateValue(evt.nativeEvent.pageX);
+      },
+    })
+  ).current;
+
+  const percentage = ((value - minimumValue) / (maximumValue - minimumValue)) * 100;
+
+  return (
+    <View
+      {...panResponder.panHandlers}
+      style={styles.sliderContainer}
+      onLayout={(e) => {
+        setTrackLayout({
+          x: e.nativeEvent.layout.x,
+          width: e.nativeEvent.layout.width,
+        });
+      }}
+    >
+      <View style={styles.customTrack}>
+        <View style={[styles.customFill, { width: `${percentage}%` }]} />
+        <View style={[styles.customThumb, { left: `${percentage}%` }]} />
+      </View>
+    </View>
+  );
+};
 
 const CutoutButton: React.FC<CutoutButtonProps> = ({ onPress, onCutoutAdd }) => {
   const [showModal, setShowModal] = useState(false);
@@ -139,57 +199,45 @@ const CutoutButton: React.FC<CutoutButtonProps> = ({ onPress, onCutoutAdd }) => 
               </View>
             </View>
 
-            {/* Size Control */}
+            {/* Size Control - Converted */}
             <View style={styles.section}>
               <View style={styles.controlHeader}>
                 <Text style={styles.sectionLabel}>Size</Text>
                 <Text style={styles.controlValue}>{size.toFixed(0)}%</Text>
               </View>
-              <Slider
-                style={styles.slider}
+              <CustomSlider
                 minimumValue={10}
                 maximumValue={100}
                 value={size}
                 onValueChange={setSize}
-                minimumTrackTintColor="#ec9a15"
-                maximumTrackTintColor="rgba(255, 255, 255, 0.2)"
-                thumbTintColor="#ec9a15"
               />
             </View>
 
-            {/* Rotation Control */}
+            {/* Rotation Control - Converted */}
             <View style={styles.section}>
               <View style={styles.controlHeader}>
                 <Text style={styles.sectionLabel}>Rotation</Text>
                 <Text style={styles.controlValue}>{rotation.toFixed(0)}°</Text>
               </View>
-              <Slider
-                style={styles.slider}
+              <CustomSlider
                 minimumValue={0}
                 maximumValue={360}
                 value={rotation}
                 onValueChange={setRotation}
-                minimumTrackTintColor="#ec9a15"
-                maximumTrackTintColor="rgba(255, 255, 255, 0.2)"
-                thumbTintColor="#ec9a15"
               />
             </View>
 
-            {/* Opacity Control */}
+            {/* Opacity Control - Converted */}
             <View style={styles.section}>
               <View style={styles.controlHeader}>
                 <Text style={styles.sectionLabel}>Opacity</Text>
                 <Text style={styles.controlValue}>{(opacity * 100).toFixed(0)}%</Text>
               </View>
-              <Slider
-                style={styles.slider}
+              <CustomSlider
                 minimumValue={0}
                 maximumValue={1}
                 value={opacity}
                 onValueChange={setOpacity}
-                minimumTrackTintColor="#ec9a15"
-                maximumTrackTintColor="rgba(255, 255, 255, 0.2)"
-                thumbTintColor="#ec9a15"
               />
             </View>
 
@@ -306,10 +354,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
   },
-  slider: {
-    height: 40,
-    borderRadius: 20,
-  },
   addButton: {
     paddingVertical: 14,
     paddingHorizontal: 24,
@@ -335,6 +379,41 @@ const styles = StyleSheet.create({
     color: "rgba(255, 255, 255, 0.7)",
     fontSize: 13,
     lineHeight: 18,
+  },
+  /* 🎛️ NEW NATIVE RESPONSIVE SLIDER PACKET */
+  sliderContainer: {
+    height: 40,
+    justifyContent: "center",
+    width: "100%",
+  },
+  customTrack: {
+    height: 6,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    borderRadius: 3,
+    position: "relative",
+    width: "100%",
+  },
+  customFill: {
+    height: "100%",
+    backgroundColor: "#ec9a15",
+    borderRadius: 3,
+    position: "absolute",
+    left: 0,
+    top: 0,
+  },
+  customThumb: {
+    position: "absolute",
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#ec9a15",
+    top: -6,
+    marginLeft: -9,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 4,
   },
 });
 

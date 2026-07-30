@@ -31,6 +31,11 @@ const CameraModule: React.FC = () => {
   }, []);
 
   const handleNextFromCamera = useCallback((clips: CameraClipArray) => {
+    console.log('🎥 CameraModule: handleNextFromCamera called with', clips?.length ?? 0, 'clips');
+    console.log('🎥 CameraModule: Raw clips array:', JSON.stringify(clips, null, 2));
+    if (clips && clips.length > 0) {
+      console.log('📹 CameraModule: First clip:', JSON.stringify(clips[0], null, 2));
+    }
     setCameraClips(clips);
     setPreviewClips(clips);
     setScreen('Preview');

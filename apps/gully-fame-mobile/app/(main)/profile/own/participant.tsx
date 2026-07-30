@@ -22,12 +22,12 @@ import {
 import BottomNav from "@components/layout/BottomNav";
 import { LinearGradient } from "expo-linear-gradient";
 import { authService } from "@api/services/authService";
-import { useOwnProfile } from "../shared/profileHooks";
+import { useOwnProfile } from "@/components/profile/shared/profileHooks";
 import {
     LevelUpSection,
     StatsSection,
     UserInfoSection,
-} from "../shared/ProfileComponents";
+} from "@/components/profile/shared/ProfileComponents";
 import {
     UserIconSVG,
     HomeIconSVG,

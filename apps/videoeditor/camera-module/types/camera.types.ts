@@ -62,6 +62,7 @@ export interface CameraClip {
   thumbnailUri?: string; // Cached thumbnail for timeline display
   textOverlays?: import("./textOverlay.types").TextOverlay[]; // Text overlays added to the clip
   audioTracks?: import("./music.types").AudioTrack[]; // Audio tracks (music, voiceover, sound effects)
+  audioTracksEnhanced?: import("./audioEffects.types").AudioTrackWithEffects[]; // Enhanced audio tracks with effects
   transitions?: import("./transitions.types").ClipTransition[]; // Transitions applied to this clip
   // New properties for video settings
   resolution?: import("./camera.types").Resolution; // Video resolution (HD, 4K)
@@ -69,11 +70,15 @@ export interface CameraClip {
   colorMode?: import("./camera.types").ColorMode; // Color mode (SDR, HDR)
   // New properties for advanced features
   voiceOverlays?: import("./voiceOverlay.types").VoiceOverlay[]; // Voice recordings
+  voiceOverlaysEnhanced?: import("./audioEffects.types").VoiceOverlayWithEffects[]; // Enhanced voice overlays with effects
   soundEffects?: import("./voiceOverlay.types").SoundEffect[]; // Sound effects
+  textToSpeech?: import("./audioEffects.types").TextToSpeechConfig[]; // Text-to-speech audio
   captions?: import("./voiceOverlay.types").Caption[]; // Captions/subtitles
   links?: import("./voiceOverlay.types").Link[]; // Interactive links
   cutouts?: import("./voiceOverlay.types").Cutout[]; // Cutout effects
   adjustSettings?: import("./voiceOverlay.types").AdjustSettings; // Brightness, contrast, etc.
+  overlayEffects?: import("./voiceOverlay.types").OverlayEffect[]; // Blur, vignette, watermark, gradient
+  audioMixSettings?: import("./audioEffects.types").AudioMixSettings; // Master audio mix settings
 }
 
 export type CameraClipArray = CameraClip[];

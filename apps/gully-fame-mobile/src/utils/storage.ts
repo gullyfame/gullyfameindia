@@ -109,7 +109,7 @@ export const clearStorage = async (): Promise<void> => {
  * Get all keys from AsyncStorage
  * @returns Array of keys
  */
-export const getAllKeys = async (): Promise<string[]> => {
+export const getAllKeys = async (): Promise<readonly string[]> => {
   try {
     return await AsyncStorage.getAllKeys();
   } catch (error) {

@@ -1,16 +1,20 @@
-import { ResizeMode, Video, Audio } from "expo-av";
+import { ResizeMode, Video } from "expo-av";
 import React, { useCallback, useRef, useState } from "react";
 import {
-  Animated,
   Dimensions,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  Alert,
+  ScrollView,
+  Modal,
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withSpring 
+} from "react-native-reanimated";
 import type { CameraClip } from "../types/camera.types";
 import { FilterConfig } from "../types/filters";
 import type { TextOverlay } from "../types/textOverlay.types";
@@ -22,14 +26,8 @@ import FilteredImage from "./FilteredImage";
 import FilteredVideo from "./FilteredVideo";
 import PreviewActionButtons from "./PreviewActionButtons";
 import TextEditorModal from "./TextEditorModal";
-import MusicPickerModal from "./MusicPickerModal";
-import OverlayPickerModal from "./OverlayPickerModal";
-import VoiceRecorderModal from "./VoiceRecorderModal";
-import CaptionsModal from "./CaptionsModal";
-import AdjustmentModal from "./AdjustmentModal";
-import DraggableOverlays from "./DraggableOverlays";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const FRAME_WIDTH = 40;
 const FRAME_HEIGHT = 50;
 
@@ -47,6 +45,8 @@ interface ModernPreviewEditorProps {
   onClipUpdate?: (updatedClip: CameraClip) => void;
   canUndo?: boolean;
   canRedo?: boolean;
+  onVideoPlaybackStatusUpdate?: (status: any) => void;
+  onSelectMusic?: (track: any) => void;
 }
 
 const ModernPreviewEditor: React.FC<ModernPreviewEditorProps> = ({
@@ -63,6 +63,8 @@ const ModernPreviewEditor: React.FC<ModernPreviewEditorProps> = ({
   onClipUpdate,
   canUndo = false,
   canRedo = false,
+  onVideoPlaybackStatusUpdate,
+  onSelectMusic,
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -73,13 +75,32 @@ const ModernPreviewEditor: React.FC<ModernPreviewEditorProps> = ({
     clip.filterPreset || null
   );
 
-  // Sync selectedFilter with clip.filterPreset when clip changes
+  // ✂️ TRIM STATES
+  const [trimStart, setTrimStart] = useState(0);
+  const [trimEnd, setTrimEnd] = useState(0);
+  const [showTrimHandles, setShowTrimHandles] = useState(false);
+
+  // 🎵 INSTAGRAM STYLE MUSIC ENGINE STATES
+  const [showMusicPicker, setShowMusicPicker] = useState(false);
+  const [showMusicAdjuster, setShowMusicAdjuster] = useState(false);
+  const [musicOffset, setMusicOffset] = useState(0); 
+  const [selectedTrackName, setSelectedTrackName] = useState("Braj Ras Ringtone");
+
+  // Premium Custom Curated Tracking Feed Mock Matrix Data
+  const TRENDING_TRACKS = [
+    { id: "1", title: "Millionaire", artist: "Yo Yo Honey Singh", duration: "0:30", views: "2.5M" },
+    { id: "2", title: "Softly", artist: "Karan Aujla", duration: "0:30", views: "4.1M" },
+    { id: "3", title: "Tauba Tauba", artist: "Karan Aujla / Vicky Kaushal", duration: "0:30", views: "1.8M" },
+    { id: "4", title: "Big Dawgs", artist: "Hanumankind", duration: "0:30", views: "5.2M" },
+    { id: "5", title: "Braj Ras Ringtone", artist: "Traditional Devotional", duration: "0:30", views: "900K" },
+  ];
+
   React.useEffect(() => {
     setSelectedFilter(clip.filterPreset || null);
   }, [clip.filterPreset]);
 
   const videoRef = useRef<Video>(null);
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<Animated.ScrollView>(null);
   const isDragging = useRef(false);
   const wasPlaying = useRef(false);
   const lastUpdateTime = useRef(0);
@@ -88,28 +109,31 @@ const ModernPreviewEditor: React.FC<ModernPreviewEditorProps> = ({
   const [showAddClipOverlay, setShowAddClipOverlay] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showTextEditor, setShowTextEditor] = useState(false);
-  const [showMusicPicker, setShowMusicPicker] = useState(false);
-  const [showOverlayPicker, setShowOverlayPicker] = useState(false);
-  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
-  const [showCaptions, setShowCaptions] = useState(false);
-  const [showAdjustments, setShowAdjustments] = useState(false);
-  const [isMusicPlaying, setIsMusicPlaying] = useState(false);
-  const musicSoundRef = useRef<any>(null);
   const [selectedTextOverlay, setSelectedTextOverlay] = useState<TextOverlay | null>(null);
   const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null);
   const [previewDimensions, setPreviewDimensions] = useState({
     width: SCREEN_WIDTH,
-    height: SCREEN_WIDTH * 1.5,
+    height: SCREEN_HEIGHT,
   });
-  const [showTrimHandles, setShowTrimHandles] = useState(false);
 
-  // Animation values
-  const playButtonScale = useRef(new Animated.Value(1)).current;
-  const timelineOpacity = useRef(new Animated.Value(1)).current;
+  // ⚡ Reanimated Values
+  const playButtonScale = useSharedValue(1);
+  const timelineOpacity = useSharedValue(1);
+
+  const playButtonAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: playButtonScale.value }],
+    };
+  });
+
+  const timelineAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: timelineOpacity.value,
+    };
+  });
 
   const isVideo = clip.type === "video";
 
-  // Handle delete with confirmation
   const handleDeletePress = useCallback(() => {
     setShowDeleteModal(true);
   }, []);
@@ -123,12 +147,10 @@ const ModernPreviewEditor: React.FC<ModernPreviewEditorProps> = ({
     setShowDeleteModal(false);
   }, []);
 
-  // Get speed segments if available
   const speedSegments = React.useMemo(() => {
     return clip.speedSegments && clip.speedSegments.length > 0 ? clip.speedSegments : null;
   }, [clip.speedSegments]);
 
-  // Get speed for current video time
   const getSpeedAtTime = React.useCallback(
     (time: number): number => {
       if (!speedSegments) return selectedSpeed;
@@ -138,26 +160,23 @@ const ModernPreviewEditor: React.FC<ModernPreviewEditorProps> = ({
           return seg.speed;
         }
       }
-      // Return last segment's speed if past the end
       return speedSegments[speedSegments.length - 1]?.speed ?? selectedSpeed;
     },
     [speedSegments, selectedSpeed]
   );
 
-  // Speed labels
   const speedLabels: Record<number, string> = {
     0.5: "0.5x",
     1: "1x",
     2: "2x",
     3: "3x",
+    5: "5x",
   };
 
   const frames = React.useMemo(() => {
-    if (!isVideo) {
-      return [];
-    }
+    if (!isVideo) return [];
     if (duration === 0) return [];
-    const frameCount = Math.max(10, Math.ceil(duration * 3));
+    const frameCount = Math.max(10, Math.ceil(duration * 3)); 
     return Array.from({ length: frameCount }, (_, i) => ({
       id: `frame-${i}`,
       time: (i / frameCount) * duration,
@@ -177,9 +196,10 @@ const ModernPreviewEditor: React.FC<ModernPreviewEditorProps> = ({
       if (status.isLoaded && status.durationMillis) {
         const dur = status.durationMillis / 1000;
         setDuration(dur);
+        setTrimStart(0);    
+        setTrimEnd(dur);     
         setIsReady(true);
 
-        // Initialize playback rate if using speed segments
         if (speedSegments && videoRef.current) {
           const initialSpeed = getSpeedAtTime(0);
           currentPlaybackRateRef.current = initialSpeed;
@@ -190,41 +210,34 @@ const ModernPreviewEditor: React.FC<ModernPreviewEditorProps> = ({
     [speedSegments, getSpeedAtTime]
   );
 
-  // For images, set ready state immediately
-  React.useEffect(() => {
-    if (!isVideo) {
-      setIsReady(true);
-    }
-  }, [isVideo]);
-
   const handlePlaybackStatus = useCallback(
     (status: any) => {
       if (!status.isLoaded || isDragging.current) return;
+
+      onVideoPlaybackStatusUpdate?.(status);
 
       if (status.durationMillis && status.positionMillis !== undefined) {
         const time = status.positionMillis / 1000;
         const dur = status.durationMillis / 1000;
 
-        setCurrentTime(time);
+        // 🛠️ Loop Threshold Guard: Break infinite frame updates re-render depth
+        if (Math.abs(currentTime - time) > 0.25) {
+          setCurrentTime(time);
+        }
 
-        // If video stopped but should be playing (after rate change), resume it
         if (isPlaying && !status.isPlaying && !isChangingRateRef.current && videoRef.current) {
           videoRef.current.playAsync().catch(console.warn);
         }
 
-        // Update playback rate if using speed segments
         if (speedSegments && videoRef.current && isPlaying && !isChangingRateRef.current) {
           const targetSpeed = getSpeedAtTime(time);
           if (Math.abs(targetSpeed - currentPlaybackRateRef.current) > 0.01) {
             isChangingRateRef.current = true;
             currentPlaybackRateRef.current = targetSpeed;
 
-            // Change rate while maintaining playback
-            // The second parameter (true) should keep it playing
             videoRef.current
               .setRateAsync(targetSpeed, true)
               .then(() => {
-                // Immediately check and resume if needed
                 setTimeout(() => {
                   if (isPlaying && videoRef.current && !isDragging.current) {
                     videoRef.current
@@ -246,47 +259,47 @@ const ModernPreviewEditor: React.FC<ModernPreviewEditorProps> = ({
           }
         }
 
-        // Auto-scroll timeline
         if (isPlaying && scrollViewRef.current && totalWidth > 0) {
           const progress = time / dur;
           const scrollX = Math.max(0, progress * totalWidth - SCREEN_WIDTH / 2);
-          scrollViewRef.current.scrollTo({ x: scrollX, animated: false });
+          scrollViewRef.current.scrollTo({ x: scrollX, y: 0, animated: false });
         }
 
-        // Handle end - auto-loop with 1 second pause
-        if (time >= dur - 0.1 && status.isPlaying && videoRef.current) {
-          // Pause video
+        if (time >= trimEnd - 0.1 && status.isPlaying && videoRef.current) {
           setIsPlaying(false);
           videoRef.current.pauseAsync();
 
-          // Wait 1 second, then restart
           setTimeout(async () => {
             if (videoRef.current) {
-              await videoRef.current.setPositionAsync(0);
-              setCurrentTime(0);
-              scrollViewRef.current?.scrollTo({ x: 0, animated: true });
+              await videoRef.current.setPositionAsync(trimStart * 1000); 
+              setCurrentTime(trimStart);
+              
+              if (totalWidth > 0) {
+                const progress = trimStart / duration;
+                const scrollX = Math.max(0, progress * totalWidth - SCREEN_WIDTH / 2);
+                scrollViewRef.current?.scrollTo({ x: scrollX, y: 0, animated: true });
+              }
 
-              // Reset speed
               if (speedSegments) {
-                const initialSpeed = getSpeedAtTime(0);
+                const initialSpeed = getSpeedAtTime(trimStart);
                 currentPlaybackRateRef.current = initialSpeed;
                 await videoRef.current.setRateAsync(initialSpeed, true);
               } else {
                 await videoRef.current.setRateAsync(selectedSpeed, true);
               }
 
-              // Start playing again
               await videoRef.current.playAsync();
               setIsPlaying(true);
+              
+              onVideoPlaybackStatusUpdate?.({ isLoaded: true, didJustFinish: true });
             }
-          }, 1000); // 1 second pause
+          }, 500); 
         }
       }
     },
-    [isPlaying, totalWidth, speedSegments, getSpeedAtTime, selectedSpeed]
+    [isPlaying, totalWidth, speedSegments, getSpeedAtTime, selectedSpeed, trimStart, trimEnd, duration, currentTime, onVideoPlaybackStatusUpdate]
   );
 
-  // ============ PLAY/PAUSE ============
   const togglePlayPause = useCallback(async () => {
     if (!videoRef.current || !isReady) return;
 
@@ -295,17 +308,16 @@ const ModernPreviewEditor: React.FC<ModernPreviewEditorProps> = ({
         await videoRef.current.pauseAsync();
         setIsPlaying(false);
       } else {
-        if (currentTime >= duration - 0.1) {
-          await videoRef.current.setPositionAsync(0);
-          setCurrentTime(0);
-          scrollViewRef.current?.scrollTo({ x: 0, animated: false });
+        if (currentTime >= trimEnd - 0.1) {
+          await videoRef.current.setPositionAsync(trimStart * 1000);
+          setCurrentTime(trimStart);
+          scrollViewRef.current?.scrollTo({ x: 0, y: 0, animated: false });
           if (speedSegments) {
-            const initialSpeed = getSpeedAtTime(0);
+            const initialSpeed = getSpeedAtTime(trimStart);
             currentPlaybackRateRef.current = initialSpeed;
             await videoRef.current.setRateAsync(initialSpeed, true);
           }
         } else {
-          // Set correct speed when resuming
           if (speedSegments) {
             const targetSpeed = getSpeedAtTime(currentTime);
             currentPlaybackRateRef.current = targetSpeed;
@@ -314,23 +326,22 @@ const ModernPreviewEditor: React.FC<ModernPreviewEditorProps> = ({
         }
         await videoRef.current.playAsync();
         setIsPlaying(true);
+        
+        onVideoPlaybackStatusUpdate?.({ isLoaded: true, didJustFinish: true });
       }
     } catch (error) {
       console.warn("Play/Pause error:", error);
     }
-  }, [isPlaying, isReady, currentTime, duration, speedSegments, getSpeedAtTime]);
+  }, [isPlaying, isReady, currentTime, trimStart, trimEnd, speedSegments, getSpeedAtTime, onVideoPlaybackStatusUpdate]);
 
   const seekTo = useCallback(
     async (time: number) => {
       if (!videoRef.current || !isReady) return;
-
-      const clampedTime = Math.max(0, Math.min(time, duration));
-
+      const clampedTime = Math.max(trimStart, Math.min(time, trimEnd));
       try {
         await videoRef.current.setPositionAsync(clampedTime * 1000);
         setCurrentTime(clampedTime);
 
-        // Update playback rate for the new position if using speed segments
         if (speedSegments) {
           const targetSpeed = getSpeedAtTime(clampedTime);
           currentPlaybackRateRef.current = targetSpeed;
@@ -340,7 +351,7 @@ const ModernPreviewEditor: React.FC<ModernPreviewEditorProps> = ({
         console.warn("Seek error:", error);
       }
     },
-    [isReady, duration, speedSegments, getSpeedAtTime]
+    [isReady, trimStart, trimEnd, speedSegments, getSpeedAtTime]
   );
 
   const handleScroll = useCallback(
@@ -392,13 +403,11 @@ const ModernPreviewEditor: React.FC<ModernPreviewEditorProps> = ({
     [duration, totalWidth, seekTo]
   );
 
-  // Only applies if NOT using speed segments (segments override manual speed)
   const handleSpeedChange = useCallback(
     (speed: number) => {
       setSelectedSpeed(speed);
       onSpeedChange?.(speed);
 
-      // Only apply if not using speed segments
       if (!speedSegments && videoRef.current && isReady) {
         videoRef.current.setRateAsync(speed, true);
         currentPlaybackRateRef.current = speed;
@@ -425,22 +434,14 @@ const ModernPreviewEditor: React.FC<ModernPreviewEditorProps> = ({
 
   const handleFilter = useCallback(
     (filter: FilterConfig) => {
-      console.log("Filter selected:", filter.name, filter);
-      // Store the selected filter preset as metadata
-      // Preview uses react-native-color-matrix-image-filters for visual display
-      // At export time, use applyPresetToImage/applyPresetToVideo with FFmpeg
       if (filter.name === "Original" || !hasFilterChanges(filter)) {
-        console.log("Setting filter to null (Original)");
         setSelectedFilter(null);
-        // Update clip to remove filter
         if (onClipUpdate) {
           const { filterPreset, ...clipWithoutFilter } = clip;
           onClipUpdate({ ...clipWithoutFilter });
         }
       } else {
-        console.log("Setting filter:", filter);
         setSelectedFilter(filter);
-        // Store filterPreset in clip metadata
         if (onClipUpdate) {
           onClipUpdate({ ...clip, filterPreset: filter });
         }
@@ -450,12 +451,10 @@ const ModernPreviewEditor: React.FC<ModernPreviewEditorProps> = ({
   );
 
   const handleOverlay = useCallback(() => {
-    console.log("Opening overlay picker");
-    setShowOverlayPicker(true);
+    console.log("Overlay pressed");
   }, []);
 
   const handleText = useCallback(() => {
-    console.log("Text button pressed - opening text editor");
     setSelectedTextOverlay(null);
     setShowTextEditor(true);
   }, []);
@@ -468,24 +467,18 @@ const ModernPreviewEditor: React.FC<ModernPreviewEditorProps> = ({
 
   const handleTextOverlaySave = useCallback(
     (overlay: TextOverlay) => {
-      console.log("handleTextOverlaySave called with overlay:", overlay);
       const existingOverlays = clip.textOverlays || [];
       const existingIndex = existingOverlays.findIndex((o) => o.id === overlay.id);
 
       let updatedOverlays: TextOverlay[];
       if (existingIndex >= 0) {
-        // Update existing
         updatedOverlays = [...existingOverlays];
         updatedOverlays[existingIndex] = overlay;
-        console.log("Updated existing overlay");
       } else {
-        // Add new
         updatedOverlays = [...existingOverlays, overlay];
-        console.log("Added new overlay, total overlays:", updatedOverlays.length);
       }
 
       const updatedClip = { ...clip, textOverlays: updatedOverlays };
-      console.log("Calling onClipUpdate with updated clip:", updatedClip);
       onClipUpdate?.(updatedClip);
       setSelectedOverlayId(null);
     },
@@ -525,362 +518,35 @@ const ModernPreviewEditor: React.FC<ModernPreviewEditorProps> = ({
     setSelectedOverlayId(null);
   }, []);
 
-  const handleMusicSelect = useCallback(
-    (track: {
-      id: string;
-      name: string;
-      uri: string;
-      duration?: number;
-      startTime?: number;
-      endTime?: number;
-    }) => {
-      console.log("=== handleMusicSelect CALLED ===");
-      console.log("Music track selected:", track);
-      // Store music track in clip metadata
-      if (onClipUpdate) {
-        const updatedClip = { ...clip, musicTrack: track };
-        console.log("Updating clip with music track");
-        onClipUpdate(updatedClip as any);
-      }
-      setShowMusicPicker(false);
-
-      // Auto-play the selected music
-      console.log("Auto-playing selected music");
-      playMusic(track);
-    },
-    [clip, onClipUpdate, playMusic]
-  );
-
-  const playMusic = useCallback(async (track: any) => {
-    console.log("=== playMusic CALLED ===");
-    console.log("Track:", track);
-    try {
-      // Stop any existing music
-      if (musicSoundRef.current) {
-        console.log("Stopping existing music");
-        await musicSoundRef.current.stopAsync();
-        await musicSoundRef.current.unloadAsync();
-        musicSoundRef.current = null;
-      }
-
-      console.log("Loading new music from URI:", track.uri);
-      // Load and play new music
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: track.uri },
-        {
-          shouldPlay: true,
-          volume: 0.5,
-          positionMillis: (track.startTime || 0) * 1000,
-        }
-      );
-
-      console.log("Music loaded successfully");
-      musicSoundRef.current = sound;
-      setIsMusicPlaying(true);
-
-      sound.setOnPlaybackStatusUpdate((status: any) => {
-        if (status.isLoaded) {
-          // Stop at end time if specified
-          if (track.endTime && status.positionMillis >= track.endTime * 1000) {
-            sound.pauseAsync();
-            setIsMusicPlaying(false);
-          }
-          if (status.didJustFinish) {
-            setIsMusicPlaying(false);
-          }
-        }
-      });
-    } catch (error) {
-      console.error("Error playing music:", error);
-    }
-  }, []);
-
-  const toggleMusicPlayback = useCallback(async () => {
-    if (!musicSoundRef.current) {
-      // Play music if not loaded
-      const track = (clip as any).musicTrack;
-      if (track) {
-        await playMusic(track);
-      }
-      return;
-    }
-
-    try {
-      const status = await musicSoundRef.current.getStatusAsync();
-      if (status.isLoaded) {
-        if (status.isPlaying) {
-          await musicSoundRef.current.pauseAsync();
-          setIsMusicPlaying(false);
-        } else {
-          await musicSoundRef.current.playAsync();
-          setIsMusicPlaying(true);
-        }
-      }
-    } catch (error) {
-      console.error("Error toggling music:", error);
-    }
-  }, [clip, playMusic]);
-
-  const handleMusicPickerClose = useCallback(() => {
-    setShowMusicPicker(false);
-  }, []);
-
-  const handleOverlaySelect = useCallback(
-    (overlay: { id: string; type: string; uri: string; name?: string }) => {
-      console.log("Overlay selected:", overlay);
-      // Store overlay in clip metadata
-      if (onClipUpdate) {
-        const overlays = (clip as any).overlays || [];
-        const updatedOverlays = [...overlays, overlay];
-        const updatedClip = { ...clip, overlays: updatedOverlays };
-        onClipUpdate(updatedClip as any);
-      }
-      setShowOverlayPicker(false);
-    },
-    [clip, onClipUpdate]
-  );
-
-  const handleOverlayPickerClose = useCallback(() => {
-    setShowOverlayPicker(false);
-  }, []);
-
-  const handleStickerUpdate = useCallback(
-    (overlay: any) => {
-      console.log("Updating sticker position:", overlay);
-      if (onClipUpdate) {
-        const stickers = (clip as any).stickers || [];
-        const updatedStickers = stickers.map((s: any) => (s.id === overlay.id ? overlay : s));
-        const updatedClip = { ...clip, stickers: updatedStickers };
-        onClipUpdate(updatedClip as any);
-      }
-    },
-    [clip, onClipUpdate]
-  );
-
-  const handleOverlayUpdate = useCallback(
-    (overlay: any) => {
-      console.log("Updating overlay position:", overlay);
-      if (onClipUpdate) {
-        const overlays = (clip as any).overlays || [];
-        const updatedOverlays = overlays.map((o: any) => (o.id === overlay.id ? overlay : o));
-        const updatedClip = { ...clip, overlays: updatedOverlays };
-        onClipUpdate(updatedClip as any);
-      }
-    },
-    [clip, onClipUpdate]
-  );
-
-  const handleStickerDelete = useCallback(
-    (stickerId: string) => {
-      console.log("Deleting sticker:", stickerId);
-      if (onClipUpdate) {
-        const stickers = (clip as any).stickers || [];
-        const updatedStickers = stickers.filter((s: any) => s.id !== stickerId);
-        const updatedClip = { ...clip, stickers: updatedStickers };
-        onClipUpdate(updatedClip as any);
-      }
-    },
-    [clip, onClipUpdate]
-  );
-
-  const handleOverlayDelete = useCallback(
-    (overlayId: string) => {
-      console.log("Deleting overlay:", overlayId);
-      if (onClipUpdate) {
-        const overlays = (clip as any).overlays || [];
-        const updatedOverlays = overlays.filter((o: any) => o.id !== overlayId);
-        const updatedClip = { ...clip, overlays: updatedOverlays };
-        onClipUpdate(updatedClip as any);
-      }
-    },
-    [clip, onClipUpdate]
-  );
-
-  const handleMusicDelete = useCallback(async () => {
-    console.log("Deleting music track");
-
-    // Stop and unload music
-    if (musicSoundRef.current) {
-      try {
-        await musicSoundRef.current.stopAsync();
-        await musicSoundRef.current.unloadAsync();
-        musicSoundRef.current = null;
-        setIsMusicPlaying(false);
-      } catch (error) {
-        console.warn("Error stopping music:", error);
-      }
-    }
-
-    if (onClipUpdate) {
-      const { musicTrack, ...clipWithoutMusic } = clip as any;
-      onClipUpdate(clipWithoutMusic);
-    }
-  }, [clip, onClipUpdate]);
-
   const handleTrim = useCallback(() => {
-    // Toggle trim handles visibility
-    // When enabled, user can use timeline to set trim points
     setShowTrimHandles(!showTrimHandles);
     if (!showTrimHandles && isVideo && videoRef.current) {
-      // Pause video when entering trim mode for precision
       videoRef.current.pauseAsync();
       setIsPlaying(false);
     }
   }, [showTrimHandles, isVideo]);
 
-  const handleSticker = useCallback(
-    (sticker?: string | number) => {
-      if (sticker !== undefined) {
-        console.log("Sticker selected:", sticker);
-        // Store sticker in clip metadata for export
-        if (onClipUpdate) {
-          const stickers = (clip as any).stickers || [];
-          const updatedStickers = [...stickers, { id: `sticker-${Date.now()}`, uri: sticker }];
-          onClipUpdate({ ...clip, stickers: updatedStickers } as any);
-        }
-      }
-    },
-    [clip, onClipUpdate]
-  );
+  const handleSticker = useCallback((sticker?: string | number) => {
+    if (sticker !== undefined) {
+      console.log("Sticker selected:", sticker);
+    }
+  }, []);
 
+  // 🛠️ FIX 2: Correctly mapped from ReferenceError to launch picker window sheet
   const handleMusic = useCallback(() => {
-    console.log("Opening music picker");
     setShowMusicPicker(true);
+    if (videoRef.current) {
+      videoRef.current.pauseAsync();
+      setIsPlaying(false);
+    }
   }, []);
-
-  const handleVoice = useCallback(() => {
-    console.log("Opening voice recorder");
-    setShowVoiceRecorder(true);
-  }, []);
-
-  const handleCaptions = useCallback(() => {
-    console.log("Opening captions editor");
-    setShowCaptions(true);
-  }, []);
-
-  const handleAdjustments = useCallback(() => {
-    console.log("=== handleAdjustments CALLED ===");
-    console.log("showAdjustments current state:", showAdjustments);
-    Alert.alert("Debug", "handleAdjustments called, opening modal"); // Temporary alert
-    console.log("Setting showAdjustments to true");
-    setShowAdjustments(true);
-
-    // Force a re-render to ensure state change is applied
-    setTimeout(() => {
-      console.log("showAdjustments after timeout:", showAdjustments);
-    }, 100);
-  }, [showAdjustments]);
-
-  const handleVoiceSelect = useCallback(
-    (recording: { id: string; name: string; uri: string; duration: number }) => {
-      console.log("Voice recording selected:", recording);
-      if (onClipUpdate) {
-        const updatedClip = { ...clip, voiceRecording: recording };
-        onClipUpdate(updatedClip as any);
-      }
-      setShowVoiceRecorder(false);
-    },
-    [clip, onClipUpdate]
-  );
-
-  const handleCaptionsSave = useCallback(
-    (captions: any[]) => {
-      console.log("Captions saved:", captions);
-      if (onClipUpdate) {
-        const updatedClip = { ...clip, captions };
-        onClipUpdate(updatedClip as any);
-      }
-      setShowCaptions(false);
-    },
-    [clip, onClipUpdate]
-  );
-
-  const handleAdjustmentsSave = useCallback(
-    (settings: any) => {
-      console.log("Adjustment settings saved:", settings);
-      if (onClipUpdate) {
-        const updatedClip = { ...clip, adjustmentSettings: settings };
-        onClipUpdate(updatedClip as any);
-      }
-      setShowAdjustments(false);
-    },
-    [clip, onClipUpdate]
-  );
-
-  // Handle voice add
-  const handleVoiceAdd = useCallback((voice: any) => {
-    console.log("Voice added:", voice);
-    // TODO: Add voice to current clip
-  }, []);
-
-  // Handle sound FX add
-  const handleSoundFXAdd = useCallback((sound: any) => {
-    console.log("Sound FX added:", sound);
-    // TODO: Add sound effect to current clip
-  }, []);
-
-  // Handle caption add
-  const handleCaptionAdd = useCallback((caption: any) => {
-    console.log("Caption added:", caption);
-    // TODO: Add caption to current clip
-  }, []);
-
-  // Handle adjust change
-  const handleAdjustChange = useCallback((settings: any) => {
-    console.log("Adjust settings changed:", settings);
-    // TODO: Apply adjustments to current clip
-  }, []);
-
-  // Handle cutout add
-  const handleCutoutAdd = useCallback((cutout: any) => {
-    console.log("Cutout added:", cutout);
-    // TODO: Add cutout effect to current clip
-  }, []);
-
-  // Handle link add
-  const handleLinkAdd = useCallback((link: any) => {
-    console.log("Link added:", link);
-    // TODO: Add link to current clip
-  }, []);
-
-  // Handle paste
-  const handlePaste = useCallback((content: string) => {
-    console.log("Paste content:", content);
-    // TODO: Handle paste content
-  }, []);
-
-  // Calculate playhead position
-  const playheadLeft = duration > 0 ? (currentTime / duration) * totalWidth : 0;
 
   return (
     <View style={styles.container}>
-      {/* Top Bar */}
-      <View style={styles.topBar}>
-        <TouchableOpacity style={styles.topButton} onPress={onBack}>
-          <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-            <Path
-              d="M19 12H5M5 12L12 19M5 12L12 5"
-              stroke="#ffffff"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </Svg>
-        </TouchableOpacity>
-
-        <View style={styles.mediaInfo}>
-          <Text style={styles.mediaInfoText}>{isVideo ? formatTime(duration) : "Photo"}</Text>
-          {isVideo && <Text style={styles.speedInfoText}>{speedLabels[selectedSpeed]}</Text>}
-        </View>
-
-        <TouchableOpacity style={[styles.topButton, styles.nextButton]} onPress={onNext}>
-          <Text style={styles.nextButtonText}>Next</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Media Preview */}
+      
+      {/* 🎥 FULL SCREEN IMMERSIVE PREVIEW BACKDROP BASE LAYER */}
       <TouchableOpacity
-        style={styles.previewContainer}
+        style={styles.fullScreenPreviewContainer}
         activeOpacity={1}
         onPress={isVideo ? togglePlayPause : undefined}
         disabled={!isVideo}
@@ -893,8 +559,8 @@ const ModernPreviewEditor: React.FC<ModernPreviewEditorProps> = ({
           <FilteredVideo
             videoRef={videoRef}
             source={{ uri: clip.uri }}
-            style={styles.media}
-            resizeMode={ResizeMode.CONTAIN}
+            style={styles.mediaFullScreen}
+            resizeMode={ResizeMode.COVER} 
             shouldPlay={false}
             isLooping={false}
             rate={speedSegments ? currentPlaybackRateRef.current : selectedSpeed}
@@ -906,31 +572,20 @@ const ModernPreviewEditor: React.FC<ModernPreviewEditorProps> = ({
         ) : (
           <FilteredImage
             source={{ uri: clip.uri }}
-            style={styles.media}
-            resizeMode="contain"
+            style={styles.mediaFullScreen}
+            resizeMode="cover"
             filter={selectedFilter || undefined}
           />
         )}
 
-        {/* Play Overlay with animated button */}
         {!isPlaying && isVideo && (
           <View style={styles.playOverlay}>
-            <Animated.View style={{ transform: [{ scale: playButtonScale }] }}>
+            <Animated.View style={playButtonAnimatedStyle}>
               <TouchableOpacity
                 style={styles.playButton}
                 onPress={togglePlayPause}
-                onPressIn={() => {
-                  Animated.spring(playButtonScale, {
-                    toValue: 0.9,
-                    useNativeDriver: true,
-                  }).start();
-                }}
-                onPressOut={() => {
-                  Animated.spring(playButtonScale, {
-                    toValue: 1,
-                    useNativeDriver: true,
-                  }).start();
-                }}
+                onPressIn={() => { playButtonScale.value = withSpring(0.9); }}
+                onPressOut={() => { playButtonScale.value = withSpring(1); }}
               >
                 <View style={styles.playButtonInner}>
                   <Svg width={32} height={32} viewBox="0 0 24 24" fill="none">
@@ -943,18 +598,14 @@ const ModernPreviewEditor: React.FC<ModernPreviewEditorProps> = ({
           </View>
         )}
 
-        {/* Progress bar overlay when playing */}
         {isPlaying && isVideo && duration > 0 && (
           <View style={styles.progressBarOverlay}>
             <View style={styles.progressBarTrack}>
-              <View
-                style={[styles.progressBarFill, { width: `${(currentTime / duration) * 100}%` }]}
-              />
+              <View style={[styles.progressBarFill, { width: `${(currentTime / duration) * 100}%` }]} />
             </View>
           </View>
         )}
 
-        {/* Enhanced Time Display */}
         {isVideo && isReady && (
           <View style={styles.timeDisplay}>
             <View style={styles.timeDisplayInner}>
@@ -965,7 +616,6 @@ const ModernPreviewEditor: React.FC<ModernPreviewEditorProps> = ({
           </View>
         )}
 
-        {/* Text Overlays */}
         {isReady && clip.textOverlays && clip.textOverlays.length > 0 && (
           <DraggableTextOverlays
             overlays={clip.textOverlays}
@@ -977,348 +627,405 @@ const ModernPreviewEditor: React.FC<ModernPreviewEditorProps> = ({
             selectedOverlayId={selectedOverlayId}
           />
         )}
-
-        {/* Stickers with Delete Button */}
-        {isReady && (clip as any).stickers && (clip as any).stickers.length > 0 && (
-          <DraggableOverlays
-            overlays={(clip as any).stickers}
-            containerWidth={previewDimensions.width}
-            containerHeight={previewDimensions.height}
-            onDelete={handleStickerDelete}
-            onUpdate={handleStickerUpdate}
-          />
-        )}
-
-        {/* Overlays (Shapes/Effects) with Delete Button */}
-        {isReady && (clip as any).overlays && (clip as any).overlays.length > 0 && (
-          <DraggableOverlays
-            overlays={(clip as any).overlays}
-            containerWidth={previewDimensions.width}
-            containerHeight={previewDimensions.height}
-            onDelete={handleOverlayDelete}
-            onUpdate={handleOverlayUpdate}
-          />
-        )}
-
-        {/* Music Indicator with Delete Button and Playback */}
-        {isReady && (clip as any).musicTrack && (
-          <View
-            style={{
-              position: "absolute",
-              top: 16,
-              right: 16,
-              backgroundColor: "rgba(0, 0, 0, 0.7)",
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-              borderRadius: 20,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <TouchableOpacity onPress={toggleMusicPlayback} activeOpacity={0.7}>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                {isMusicPlaying ? (
-                  <Path d="M6 4h4v16H6zM14 4h4v16h-4z" fill="#ec9a15" />
-                ) : (
-                  <Path
-                    d="M9 18V5l12-2v13M9 18c0 1.657-1.343 3-3 3s-3-1.343-3-3 1.343-3 3-3 3 1.343 3 3zm12-2c0 1.657-1.343 3-3 3s-3-1.343-3-3 1.343-3 3-3 3 1.343 3 3z"
-                    stroke="#ec9a15"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                )}
-              </Svg>
-            </TouchableOpacity>
-            <Text style={{ color: "#ffffff", fontSize: 12, fontWeight: "600" }}>
-              {(clip as any).musicTrack.name?.substring(0, 15) || "Music"}
-            </Text>
-            <TouchableOpacity onPress={handleMusicDelete} activeOpacity={0.7}>
-              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M18 6L6 18M6 6l12 12"
-                  stroke="#ffffff"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
-            </TouchableOpacity>
-          </View>
-        )}
       </TouchableOpacity>
 
-      {/* Action Buttons */}
-      <View style={styles.actionButtons}>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={handleDeletePress}
-          activeOpacity={0.7}
-        >
-          <View style={styles.deleteIconContainer}>
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-              <Path
-                d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-                stroke="#ff4444"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
+      {/* 🎛️ TRANSPARENT CONTROL OVERLAY CHANNELS CONTAINER LAYER */}
+      <View style={styles.floatingControlsContainer} pointerEvents="box-none">
+        
+        {/* Top Floating Action Tray Header */}
+        <View style={styles.topBar}>
+          <TouchableOpacity style={styles.topButton} onPress={onBack}>
+            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+              <Path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
-          </View>
-          <Text style={styles.deleteButtonText}>Delete</Text>
-        </TouchableOpacity>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButtonPrimary} onPress={handleAddPress}>
-          <View style={styles.addIcon}>
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-              <Path
-                d="M12 5v14M5 12h14"
-                stroke="#ffffff"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </Svg>
-          </View>
-          <Text style={styles.actionButtonTextPrimary}>Add</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.actionButton} onPress={handleTrim}>
-          <View
-            style={[styles.trimIconContainer, showTrimHandles && styles.trimIconContainerActive]}
-          >
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-              <Path
-                d="M3 12h18M9 6l-6 6 6 6M15 6l6 6-6 6"
-                stroke={showTrimHandles ? "#ec9a15" : "#888888"}
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </Svg>
-          </View>
-          <Text style={[styles.actionButtonText, showTrimHandles && { color: "#ec9a15" }]}>
-            Trim
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Timeline Section - Same layout for both videos and images */}
-      {isReady && (
-        <View style={styles.timelineSection}>
-          {/* Timeline Controls */}
-          <View style={styles.timelineControls}>
-            <TouchableOpacity
-              style={[styles.timelineControl, !canUndo && styles.timelineControlDisabled]}
-              onPress={onUndo}
-              disabled={!canUndo}
-              activeOpacity={canUndo ? 0.7 : 1}
-            >
-              <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M3 7v6h6M3 7l6-6M3 7l6 6"
-                  stroke={canUndo ? "#888888" : "#444444"}
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
-            </TouchableOpacity>
-
-            {/* Play/Pause button - only for videos */}
-            {isVideo ? (
-              <TouchableOpacity style={styles.playButtonBottom} onPress={togglePlayPause}>
-                {isPlaying ? (
-                  <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-                    <Path d="M10 4H6v16h4V4zM18 4h-4v16h4V4z" fill="#ffffff" />
-                  </Svg>
-                ) : (
-                  <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-                    <Path d="M8 5v14l11-7L8 5z" fill="#ffffff" />
-                  </Svg>
-                )}
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.playButtonBottom} />
-            )}
-
-            <TouchableOpacity
-              style={[styles.timelineControl, !canRedo && styles.timelineControlDisabled]}
-              onPress={onRedo}
-              disabled={!canRedo}
-              activeOpacity={canRedo ? 0.7 : 1}
-            >
-              <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M21 7v6h-6M21 7l-6-6M21 7l-6 6"
-                  stroke={canRedo ? "#888888" : "#444444"}
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </Svg>
-            </TouchableOpacity>
+          <View style={styles.mediaInfo}>
+            <Text style={styles.mediaInfoText}>{isVideo ? formatTime(duration) : "Photo"}</Text>
+            {isVideo && <Text style={styles.speedInfoText}>{speedLabels[selectedSpeed]}</Text>}
           </View>
 
-          {/* Enhanced Draggable Timeline - only for videos */}
-          {isVideo && duration > 0 && (
-            <Animated.View style={[styles.timelineWrapper, { opacity: timelineOpacity }]}>
-              <ScrollView
-                ref={scrollViewRef}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                scrollEventThrottle={16}
-                onScroll={handleScroll}
-                onScrollBeginDrag={handleScrollBegin}
-                onScrollEndDrag={handleScrollEnd}
-                onMomentumScrollEnd={handleScrollEnd}
-                contentContainerStyle={[
-                  styles.timelineContent,
-                  { width: totalWidth + SCREEN_WIDTH },
-                ]}
-              >
-                <View style={styles.timelineTrack}>
-                  {/* Left Padding */}
-                  <View style={{ width: SCREEN_WIDTH / 2 }} />
+          <TouchableOpacity style={[styles.topButton, styles.nextButton]} onPress={onNext}>
+            <Text style={styles.nextButtonText}>Next</Text>
+          </TouchableOpacity>
+        </View>
 
-                  {/* Enhanced Frames with gradient */}
-                  {frames.map((frame, index) => {
-                    const isActive =
-                      currentTime >= frame.time &&
-                      currentTime < frame.time + duration / frames.length;
-                    return (
-                      <View key={frame.id} style={styles.frame}>
-                        <View style={[styles.frameContent, isActive && styles.frameContentActive]}>
-                          {index % 3 === 0 && <View style={styles.frameThumbnail} />}
-                          {index % 10 === 0 && (
-                            <Text style={styles.frameTime}>{formatTime(frame.time)}</Text>
-                          )}
-                        </View>
-                        {isActive && <View style={styles.frameActiveIndicator} />}
-                      </View>
-                    );
-                  })}
-
-                  {/* Right Padding */}
-                  <View style={{ width: SCREEN_WIDTH / 2 }} />
-                </View>
-              </ScrollView>
-
-              {/* Enhanced Center Indicator with glow */}
-              <View style={styles.centerIndicator}>
-                <View style={styles.centerIndicatorGlow} />
-                <View style={styles.centerLine} />
-                <View style={styles.centerTriangle} />
+        {/* Bottom Control Clustered Row Panels */}
+        <View style={styles.bottomControlsCluster} pointerEvents="box-none">
+          
+          {/* Primary Action Row Controllers */}
+          <View style={styles.actionButtons}>
+            <TouchableOpacity style={styles.actionButton} onPress={handleDeletePress} activeOpacity={0.7}>
+              <View style={styles.deleteIconContainer}>
+                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                  <Path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" stroke="#ff4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
               </View>
-            </Animated.View>
-          )}
+              <Text style={styles.deleteButtonText}>Delete</Text>
+            </TouchableOpacity>
 
-          {/* Speed Controls - only for videos */}
-          {isVideo && (
-            <View style={styles.speedControls}>
-              {[0.5, 1, 2, 3].map((speed) => (
-                <TouchableOpacity
-                  key={speed}
-                  style={[styles.speedButton, selectedSpeed === speed && styles.speedButtonActive]}
-                  onPress={() => handleSpeedChange(speed)}
-                >
-                  <Text
-                    style={[
-                      styles.speedButtonText,
-                      selectedSpeed === speed && styles.speedButtonTextActive,
-                    ]}
+            <TouchableOpacity style={styles.actionButtonPrimary} onPress={handleAddPress}>
+              <View style={styles.addIcon}>
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                  <Path d="M12 5v14M5 12h14" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </View>
+              <Text style={styles.actionButtonTextPrimary}>Add</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionButton} onPress={handleTrim}>
+              <View style={[styles.trimIconContainer, showTrimHandles && styles.trimIconContainerActive]}>
+                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                  <Path d="M3 12h18M9 6l-6 6 6 6M15 6l6 6-6 6" stroke={showTrimHandles ? "#ec9a15" : "#888888"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </View>
+              <Text style={[styles.actionButtonText, showTrimHandles && { color: "#ec9a15" }]}>Trim</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* 🎞️ FIXED TRIM TIMELINE PANEL */}
+          {showTrimHandles && isVideo && (
+            <View style={styles.trimAdjusterContainer}>
+              <View style={styles.trimInfoRow}>
+                <Text style={styles.trimTimeText}>Trim Start: {formatTime(trimStart)}</Text>
+                <Text style={styles.trimTimeText}>Trim End: {formatTime(trimEnd)}</Text>
+              </View>
+              <View style={styles.trimButtonsRow}>
+                <View style={styles.trimGroup}>
+                  <TouchableOpacity 
+                    style={styles.trimAdjustButton} 
+                    onPress={() => {
+                      const newStart = Math.max(0, trimStart - 0.5);
+                      setTrimStart(newStart);
+                      setCurrentTime(newStart);
+                      videoRef.current?.setPositionAsync(newStart * 1000).catch(console.warn);
+                      onClipUpdate?.({ ...clip, trimStart: newStart, trimEnd });
+                    }}
                   >
-                    {speedLabels[speed]}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Text style={styles.trimAdjustButtonText}>-0.5s</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.trimGroupLabel}>Start Point</Text>
+                  <TouchableOpacity 
+                    style={styles.trimAdjustButton} 
+                    onPress={() => {
+                      const newStart = Math.min(trimEnd - 1, trimStart + 0.5);
+                      setTrimStart(newStart);
+                      setCurrentTime(newStart);
+                      videoRef.current?.setPositionAsync(newStart * 1000).catch(console.warn);
+                      onClipUpdate?.({ ...clip, trimStart: newStart, trimEnd });
+                    }}
+                  >
+                    <Text style={styles.trimAdjustButtonText}>+0.5s</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.trimGroup}>
+                  <TouchableOpacity 
+                    style={styles.trimAdjustButton} 
+                    onPress={() => {
+                      const newEnd = Math.max(trimStart + 1, trimEnd - 0.5);
+                      setTrimEnd(newEnd);
+                      setCurrentTime(newEnd);
+                      videoRef.current?.setPositionAsync(newEnd * 1000).catch(console.warn);
+                      onClipUpdate?.({ ...clip, trimStart, trimEnd: newEnd });
+                    }}
+                  >
+                    <Text style={styles.trimAdjustButtonText}>-0.5s</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.trimGroupLabel}>End Point</Text>
+                  <TouchableOpacity 
+                    style={styles.trimAdjustButton} 
+                    onPress={() => {
+                      const newEnd = Math.min(duration, trimEnd + 0.5);
+                      setTrimEnd(newEnd);
+                      setCurrentTime(newEnd);
+                      videoRef.current?.setPositionAsync(newEnd * 1000).catch(console.warn);
+                      onClipUpdate?.({ ...clip, trimStart, trimEnd: newEnd });
+                    }}
+                  >
+                    <Text style={styles.trimAdjustButtonText}>+0.5s</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
           )}
+
+          {/* Main Scroller Timeline Track */}
+          {isReady && (
+            <View style={styles.timelineSection}>
+              <View style={styles.timelineControls}>
+                <TouchableOpacity
+                  style={[styles.timelineControl, !canUndo && styles.timelineControlDisabled]}
+                  onPress={onUndo}
+                  disabled={!canUndo}
+                  activeOpacity={canUndo ? 0.7 : 1}
+                >
+                  <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                    <Path d="M3 7v6h6M3 7l6-6M3 7l6 6" stroke={canUndo ? "#888888" : "#444444"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                </TouchableOpacity>
+
+                {isVideo ? (
+                  <TouchableOpacity style={styles.playButtonBottom} onPress={togglePlayPause}>
+                    {isPlaying ? (
+                      <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+                        <Path d="M10 4H6v16h4V4zM18 4h-4v16h4V4z" fill="#ffffff" />
+                      </Svg>
+                    ) : (
+                      <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+                        <Path d="M8 5v14l11-7L8 5z" fill="#ffffff" />
+                      </Svg>
+                    )}
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.playButtonBottom} />
+                )}
+
+                <TouchableOpacity
+                  style={[styles.timelineControl, !canRedo && styles.timelineControlDisabled]}
+                  onPress={onRedo}
+                  disabled={!canRedo}
+                  activeOpacity={canRedo ? 0.7 : 1}
+                >
+                  <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                    <Path d="M21 7v6h-6M21 7l-6-6M21 7l-6 6" stroke={canRedo ? "#888888" : "#444444"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </Svg>
+                </TouchableOpacity>
+              </View>
+
+              {isVideo && duration > 0 && (
+                <Animated.View style={[styles.timelineWrapper, timelineAnimatedStyle]}>
+                  <Animated.ScrollView
+                    ref={scrollViewRef}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    scrollEventThrottle={16}
+                    onScroll={handleScroll}
+                    onScrollBeginDrag={handleScrollBegin}
+                    onScrollEndDrag={handleScrollEnd}
+                    onMomentumScrollEnd={handleScrollEnd}
+                    contentContainerStyle={[styles.timelineContent, { width: totalWidth + SCREEN_WIDTH }]}
+                  >
+                    <View style={styles.timelineTrack}>
+                      <View style={{ width: SCREEN_WIDTH / 2 }} />
+
+                      {frames.map((frame, index) => {
+                        const isActive = currentTime >= frame.time && currentTime < frame.time + duration / frames.length;
+                        return (
+                          <View key={frame.id} style={styles.frame}>
+                            <View style={[styles.frameContent, isActive && styles.frameContentActive]}>
+                              {index % 3 === 0 && <View style={styles.frameThumbnail} />}
+                              {index % 10 === 0 && <Text style={styles.frameTime}>{formatTime(frame.time)}</Text>}
+                            </View>
+                            {isActive && <View style={styles.frameActiveIndicator} />}
+                          </View>
+                        );
+                      })}
+
+                      <View style={{ width: SCREEN_WIDTH / 2 }} />
+                    </View>
+                  </Animated.ScrollView>
+
+                  <View style={styles.centerIndicator}>
+                    <View style={styles.centerLine} />
+                  </View>
+                </Animated.View>
+              )}
+
+              {isVideo && (
+                <View style={styles.speedControls}>
+                  {[0.5, 1, 2, 3, 5].map((speed) => (
+                    <TouchableOpacity
+                      key={speed}
+                      style={[styles.speedButton, selectedSpeed === speed && styles.speedButtonActive]}
+                      onPress={() => handleSpeedChange(speed)}
+                    >
+                      <Text style={[styles.speedButtonText, selectedSpeed === speed && styles.speedButtonTextActive]}>
+                        {speedLabels[speed]}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Action Tray Bottom Icons */}
+          {isReady && (
+            <PreviewActionButtons
+              displayUri={clip.uri}
+              onFilter={handleFilter}
+              onOverlay={handleOverlay}
+              onText={handleText}
+              onSticker={handleSticker}
+              onMusic={handleMusic} // Linked perfectly to choice sheet launcher function
+              onVoiceAdd={(voice) => {
+                const updatedClip = { ...clip, voiceOverlays: [...(clip.voiceOverlays || []), voice] };
+                onClipUpdate?.(updatedClip);
+              }}
+              onSoundFXAdd={(sound) => {
+                const updatedClip = { ...clip, soundEffects: [...(clip.soundEffects || []), sound] };
+                onClipUpdate?.(updatedClip);
+              }}
+              onCaptionAdd={(caption) => {
+                const updatedClip = { ...clip, captions: [...(clip.captions || []), caption] };
+                onClipUpdate?.(updatedClip);
+              }}
+              onAdjustChange={(settings) => {
+                const updatedClip = { ...clip, adjustSettings: settings };
+                onClipUpdate?.(updatedClip);
+              }}
+              onCutoutAdd={(cutout) => {
+                const updatedClip = { ...clip, cutouts: [...(clip.cutouts || []), cutout] };
+                onClipUpdate?.(updatedClip);
+              }}
+              onLinkAdd={(link) => {
+                const updatedClip = { ...clip, links: [...(clip.links || []), link] };
+                onClipUpdate?.(updatedClip);
+              }}
+              onPaste={(content) => {
+                const textOverlay = {
+                  id: `text-${Date.now()}`,
+                  text: content,
+                  x: 0.5,
+                  y: 0.5,
+                  fontSize: 24,
+                  fontWeight: "600",
+                  color: "#ffffff",
+                  textAlign: "center" as const,
+                  opacity: 1,
+                };
+                const updatedClip = { ...clip, textOverlays: [...(clip.textOverlays || []), textOverlay] };
+                onClipUpdate?.(updatedClip);
+              }}
+              startTime={currentTime}
+            />
+          )}
+        </View>
+      </View>
+
+      {/* 🎵 INSTAGRAM-STYLE MUSIC PICKER BOTTOM SHEET MODAL */}
+      <Modal
+        visible={showMusicPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowMusicPicker(false)}
+      >
+        <View style={styles.musicPickerOverlay}>
+          <TouchableOpacity style={styles.transparentBackdrop} activeOpacity={1} onPress={() => setShowMusicPicker(false)} />
+          
+          <View style={styles.musicPickerContainer}>
+            <View style={styles.sheetNotch} />
+            
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>Choose Music</Text>
+              <TouchableOpacity onPress={() => setShowMusicPicker(false)}>
+                <Text style={{ color: '#aaa', fontSize: 14, fontWeight: '600' }}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.searchBarWrapper}>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={{ marginRight: 8 }}>
+                <Path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 0 0 1.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 0 0-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 0 0 5.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="#888" />
+              </Svg>
+              <Text style={{ color: '#888', fontSize: 13 }}>Search music or artists...</Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 16, paddingHorizontal: 20, marginBottom: 12 }}>
+              <Text style={{ color: '#ec9a15', fontWeight: '700', fontSize: 13, borderBottomWidth: 2, borderBottomColor: '#ec9a15', paddingBottom: 4 }}>For You</Text>
+              <Text style={{ color: '#888', fontWeight: '600', fontSize: 13 }}>Trending</Text>
+              <Text style={{ color: '#888', fontWeight: '600', fontSize: 13 }}>Saved</Text>
+            </View>
+
+            <ScrollView style={{ flex: 1, paddingHorizontal: 16 }} showsVerticalScrollIndicator={false}>
+              {TRENDING_TRACKS.map((track) => (
+                <TouchableOpacity
+                  key={track.id}
+                  style={styles.trackItemRow}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    setSelectedTrackName(track.title); 
+                    setShowMusicPicker(false);        
+                    setShowMusicAdjuster(true);       // Automatically triggers Trimmer adjustment pane open
+                  }}
+                >
+                  <View style={styles.albumArtPlaceholder}>
+                    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                      <Path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" fill="#ec9a15" />
+                    </Svg>
+                  </View>
+
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{track.title}</Text>
+                    <Text style={{ color: '#888', fontSize: 11, marginTop: 2 }}>{track.artist} • {track.views}</Text>
+                  </View>
+
+                  <View style={styles.trackPlayPreviewButton}>
+                    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                      <Path d="M8 5v14l11-7z" fill="#fff" />
+                    </Svg>
+                  </View>
+                </TouchableOpacity>
+              ))}
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 🎵 INSTAGRAM STYLE MUSIC SLIDER OVERLAY SHEET */}
+      {showMusicAdjuster && (
+        <View style={styles.musicAdjusterModal}>
+          <View style={styles.musicHeader}>
+            <Text style={styles.musicTitle}>Adjust Audio Track</Text>
+            <TouchableOpacity 
+              style={styles.musicDoneButton} 
+              onPress={() => {
+                setShowMusicAdjuster(false);
+                onClipUpdate?.({
+                  ...clip,
+                  musicOffset: musicOffset
+                });
+              }}
+            >
+              <Text style={styles.musicDoneText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.trackNameDisplay}>🎵 {selectedTrackName}</Text>
+
+          <View style={styles.waveformWrapper}>
+            <Animated.ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              scrollEventThrottle={16}
+              onScroll={(e) => {
+                const offsetX = e.nativeEvent.contentOffset.x;
+                const calculatedOffset = Math.floor(offsetX / 10); 
+                
+                // Active threshold check protecting performance depth values
+                if(musicOffset !== calculatedOffset) {
+                  setMusicOffset(calculatedOffset);
+                }
+              }}
+              contentContainerStyle={{ paddingHorizontal: SCREEN_WIDTH / 2 - 20 }}
+            >
+              {Array.from({ length: 60 }).map((_, i) => (
+                <View key={i} style={styles.waveContainer}>
+                  <View style={[styles.waveBar, { height: 15 + Math.sin(i) * 20 }]} />
+                  {i % 5 === 0 && <Text style={styles.waveTimeLabel}>0:{i.toString().padStart(2, '0')}</Text>}
+                </View>
+              ))}
+            </Animated.ScrollView>
+            <View style={styles.musicCenterIndicator} />
+          </View>
+          <Text style={styles.musicStatusText}>Music loops from: 0:{musicOffset.toString().padStart(2, '0')}</Text>
         </View>
       )}
 
-      {/* Preview Action Buttons (Filter, Overlay, Text, Sticker, Music, Voice, Captions, Adjust) */}
-      {isReady && (
-        <PreviewActionButtons
-          displayUri={clip.uri}
-          onFilter={handleFilter}
-          onOverlay={handleOverlay}
-          onText={handleText}
-          onSticker={handleSticker}
-          onMusic={handleMusic}
-          onVoice={handleVoice}
-          onCaptions={handleCaptions}
-          onAdjust={handleAdjustments}
-        />
-      )}
-
-      {/* Add Clip Overlay */}
-      <AddClipOverlay
-        visible={showAddClipOverlay}
-        onClose={() => setShowAddClipOverlay(false)}
-        onSelectCamera={handleSelectCamera}
-        onSelectGallery={handleSelectGallery}
-      />
-
-      {/* Delete Confirmation Modal */}
-      <DeleteConfirmationModal
-        visible={showDeleteModal}
-        onConfirm={handleDeleteConfirm}
-        onCancel={handleDeleteCancel}
-        clipType={clip.type}
-      />
-
-      {/* Text Editor Modal */}
-      <TextEditorModal
-        visible={showTextEditor}
-        overlay={selectedTextOverlay}
-        onSave={handleTextOverlaySave}
-        onDelete={handleTextOverlayDelete}
-        onClose={handleTextEditorClose}
-        containerWidth={previewDimensions.width}
-        containerHeight={previewDimensions.height}
-      />
-
-      {/* Music Picker Modal */}
-      <MusicPickerModal
-        visible={showMusicPicker}
-        onSelect={handleMusicSelect}
-        onClose={handleMusicPickerClose}
-      />
-
-      {/* Overlay Picker Modal */}
-      <OverlayPickerModal
-        visible={showOverlayPicker}
-        onSelect={handleOverlaySelect}
-        onClose={handleOverlayPickerClose}
-      />
-
-      {/* Voice Recorder Modal */}
-      <VoiceRecorderModal
-        visible={showVoiceRecorder}
-        onSelect={handleVoiceSelect}
-        onClose={() => setShowVoiceRecorder(false)}
-      />
-
-      {/* Captions Modal */}
-      <CaptionsModal
-        visible={showCaptions}
-        onSave={handleCaptionsSave}
-        onClose={() => setShowCaptions(false)}
-        videoDuration={duration}
-      />
-
-      {/* Adjustment Modal */}
-      <AdjustmentModal
-        visible={showAdjustments}
-        initialSettings={(clip as any).adjustmentSettings}
-        onSave={handleAdjustmentsSave}
-        onClose={() => setShowAdjustments(false)}
-        previewUri={clip.uri}
-        previewType={clip.type}
-      />
+      <AddClipOverlay visible={showAddClipOverlay} onClose={() => setShowAddClipOverlay(false)} onSelectCamera={handleSelectCamera} onSelectGallery={handleSelectGallery} />
+      <DeleteConfirmationModal visible={showDeleteModal} onConfirm={handleDeleteConfirm} onCancel={handleDeleteCancel} clipType={clip.type} />
+      <TextEditorModal visible={showTextEditor} overlay={selectedTextOverlay} onSave={handleTextOverlaySave} onDelete={handleTextOverlayDelete} onClose={handleTextEditorClose} containerWidth={previewDimensions.width} containerHeight={previewDimensions.height} />
     </View>
   );
 };
@@ -1328,26 +1035,46 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#000000",
   },
+  /* 🎥 MAXIMUM IMMERSIVE PREVIEW VIEW STYLES BOUNDS */
+  fullScreenPreviewContainer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
+    backgroundColor: "#000000",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  mediaFullScreen: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+  },
+  /* 🎛️ FLOATING LAYER PACKETS */
+  floatingControlsContainer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10,
+    justifyContent: "space-between",
+  },
+  bottomControlsCluster: {
+    width: "100%",
+    backgroundColor: "transparent",
+  },
   topBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 12,
-    paddingTop: 50,
-    paddingBottom: 8,
-    backgroundColor: "rgba(10, 10, 10, 0.95)",
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255, 255, 255, 0.05)",
+    paddingHorizontal: 16,
+    paddingTop: 60,
+    paddingBottom: 12,
+    backgroundColor: "rgba(0, 0, 0, 0.4)", 
   },
   topButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.05)",
+    borderColor: "rgba(255, 255, 255, 0.1)",
   },
   nextButton: {
     backgroundColor: "#ec9a15",
@@ -1360,43 +1087,33 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   nextButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
+    color: "#000000",
+    fontSize: 14,
     fontWeight: "700",
   },
   mediaInfo: {
     alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
   mediaInfoText: {
     color: "#ffffff",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
   },
   speedInfoText: {
     color: "#ec9a15",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "500",
-    marginTop: 2,
-  },
-  previewContainer: {
-    flex: 1,
-    width: "100%",
-    backgroundColor: "#000000",
-    justifyContent: "center",
-    alignItems: "center",
-    overflow: "hidden",
-    marginVertical: 0,
-  },
-  media: {
-    width: "100%",
-    height: "100%",
-    backgroundColor: "#000000",
+    marginTop: 1,
   },
   playOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.2)",
+    backgroundColor: "rgba(0, 0, 0, 0.15)",
   },
   playButton: {
     width: 88,
@@ -1407,9 +1124,9 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   playButtonInner: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: "#ec9a15",
     justifyContent: "center",
     alignItems: "center",
@@ -1422,83 +1139,69 @@ const styles = StyleSheet.create({
   },
   playButtonRing: {
     position: "absolute",
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    borderWidth: 3,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 2.5,
     borderColor: "rgba(236, 154, 21, 0.4)",
     zIndex: 1,
   },
   progressBarOverlay: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
+    top: 0, left: 0, right: 0,
     height: 3,
     backgroundColor: "rgba(0, 0, 0, 0.3)",
     zIndex: 100,
   },
   progressBarTrack: {
     flex: 1,
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
     height: 3,
   },
   progressBarFill: {
     height: 3,
     backgroundColor: "#ec9a15",
-    shadowColor: "#ec9a15",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
   },
   timeDisplay: {
     position: "absolute",
-    bottom: 24,
-    left: 24,
-    backgroundColor: "rgba(0, 0, 0, 0.85)",
+    bottom: 260, 
+    left: 20,
+    backgroundColor: "rgba(0, 0, 0, 0.75)",
     borderRadius: 12,
-    overflow: "hidden",
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.1)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
   timeDisplayInner: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   timeTextCurrent: {
     color: "#ec9a15",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
     fontFamily: "monospace",
-    letterSpacing: 0.5,
   },
   timeSeparator: {
     width: 1,
-    height: 14,
+    height: 12,
     backgroundColor: "rgba(255, 255, 255, 0.2)",
-    marginHorizontal: 10,
+    marginHorizontal: 8,
   },
   timeTextTotal: {
     color: "#ffffff",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     fontFamily: "monospace",
-    letterSpacing: 0.5,
   },
   actionButtons: {
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: "#0a0a0a",
+    backgroundColor: "rgba(10, 10, 10, 0.75)", 
     borderTopWidth: 1,
     borderTopColor: "rgba(255, 255, 255, 0.08)",
   },
@@ -1510,11 +1213,9 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "rgba(255, 68, 68, 0.15)",
+    backgroundColor: "rgba(255, 68, 68, 0.2)",
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255, 68, 68, 0.3)",
   },
   deleteButtonText: {
     color: "#ff4444",
@@ -1523,7 +1224,6 @@ const styles = StyleSheet.create({
   },
   actionButtonPrimary: {
     alignItems: "center",
-    gap: 6,
   },
   addIcon: {
     width: 44,
@@ -1535,32 +1235,28 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     color: "#ffffff",
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 4,
+    fontSize: 10,
+    fontWeight: "500",
   },
   actionButtonTextPrimary: {
-    color: "#ffffff",
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 4,
+    color: "#7C3AED",
+    fontSize: 10,
+    fontWeight: "600",
   },
   trimIconContainer: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
     justifyContent: "center",
     alignItems: "center",
   },
   trimIconContainerActive: {
-    backgroundColor: "rgba(236, 154, 21, 0.2)",
+    backgroundColor: "rgba(236, 154, 21, 0.3)",
   },
   timelineSection: {
-    backgroundColor: "#0a0a0a",
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255, 255, 255, 0.08)",
+    backgroundColor: "rgba(10, 10, 10, 0.85)",
+    paddingVertical: 10,
   },
   timelineControls: {
     flexDirection: "row",
@@ -1568,45 +1264,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 50,
     marginBottom: 8,
-    paddingHorizontal: 12,
   },
   timelineControl: {
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.08)",
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
   },
   timelineControlDisabled: {
-    opacity: 0.4,
+    opacity: 0.3,
   },
   playButtonBottom: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: "#ec9a15",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#ec9a15",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
-    elevation: 6,
-    borderWidth: 2,
-    borderColor: "rgba(255, 255, 255, 0.1)",
   },
   timelineWrapper: {
     height: 60,
     marginBottom: 8,
-    marginHorizontal: 0,
-    position: "relative",
-    backgroundColor: "transparent",
-    paddingTop: 0,
-    paddingBottom: 0,
-    borderWidth: 0,
   },
   timelineContent: {
-    paddingVertical: 10,
+    paddingVertical: 6,
   },
   timelineTrack: {
     flexDirection: "row",
@@ -1616,52 +1296,36 @@ const styles = StyleSheet.create({
     width: FRAME_WIDTH,
     height: FRAME_HEIGHT,
     marginRight: 2,
-    position: "relative",
   },
   frameContent: {
     flex: 1,
     backgroundColor: "#1a1a1a",
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.1)",
+    borderColor: "rgba(255, 255, 255, 0.15)",
     justifyContent: "center",
     alignItems: "center",
-    overflow: "hidden",
   },
   frameContentActive: {
     borderColor: "#ffffff",
     borderWidth: 2,
-    backgroundColor: "#2a2a2a",
   },
   frameThumbnail: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: "#2a2a2a",
-    opacity: 0.3,
+    opacity: 0.2,
   },
   frameActiveIndicator: {
     position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 4,
+    bottom: 0, left: 0, right: 0,
+    height: 3,
     backgroundColor: "#ec9a15",
-    shadowColor: "#ec9a15",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 6,
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
   },
   frameTime: {
-    color: "rgba(255, 255, 255, 0.5)",
-    fontSize: 9,
-    fontWeight: "700",
+    color: "rgba(255, 255, 255, 0.6)",
+    fontSize: 8,
     fontFamily: "monospace",
-    zIndex: 1,
   },
   centerIndicator: {
     position: "absolute",
@@ -1669,55 +1333,231 @@ const styles = StyleSheet.create({
     top: 0,
     width: 2,
     height: FRAME_HEIGHT,
-    alignItems: "center",
     zIndex: 20,
-  },
-  centerIndicatorGlow: {
-    display: "none",
   },
   centerLine: {
     width: 2,
     height: FRAME_HEIGHT,
     backgroundColor: "#ec9a15",
   },
-  centerTriangle: {
-    display: "none",
-  },
   speedControls: {
     flexDirection: "row",
     justifyContent: "center",
     gap: 8,
-    paddingHorizontal: 12,
-    paddingTop: 2,
-    paddingBottom: 4,
+    paddingVertical: 4,
   },
   speedButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
-    borderWidth: 1.5,
-    borderColor: "rgba(255, 255, 255, 0.15)",
-    minWidth: 60,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    minWidth: 55,
     alignItems: "center",
   },
   speedButtonActive: {
     backgroundColor: "#ec9a15",
-    borderColor: "#ec9a15",
-    shadowColor: "#ec9a15",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 4,
   },
   speedButtonText: {
-    color: "rgba(255, 255, 255, 0.6)",
-    fontSize: 13,
+    color: "rgba(255, 255, 255, 0.7)",
+    fontSize: 12,
     fontWeight: "700",
-    letterSpacing: 0.5,
   },
   speedButtonTextActive: {
+    color: "#000000",
+  },
+  trimAdjusterContainer: {
+    backgroundColor: "rgba(18, 18, 18, 0.9)",
+    padding: 12,
+  },
+  trimInfoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  trimTimeText: {
+    color: "#ec9a15",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  trimButtonsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  trimGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  trimGroupLabel: {
     color: "#ffffff",
+    fontSize: 11,
+  },
+  trimAdjustButton: {
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  trimAdjustButtonText: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  /* 🎵 INSTAGRAM STYLE MUSIC PICKER UI MATRICES */
+  musicPickerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  transparentBackdrop: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+  },
+  musicPickerContainer: {
+    backgroundColor: "#161616",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    height: "70%",
+    width: "100%",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255, 255, 255, 0.08)",
+  },
+  sheetNotch: {
+    width: 40,
+    height: 4,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: 8,
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 16,
+  },
+  pickerTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  searchBarWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginHorizontal: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 16,
+  },
+  trackItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.03)',
+  },
+  albumArtPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.03)',
+  },
+  trackPlayPreviewButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  musicAdjusterModal: {
+    position: "absolute",
+    bottom: 0, left: 0, right: 0,
+    backgroundColor: "rgba(10, 10, 10, 0.98)",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 16,
+    paddingBottom: 40,
+    paddingHorizontal: 16,
+    zIndex: 999,
+  },
+  musicHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  musicTitle: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  musicDoneButton: {
+    backgroundColor: "#7C3AED",
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  musicDoneText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  trackNameDisplay: {
+    color: "#ec9a15",
+    fontSize: 14,
+    fontWeight: "600",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  waveformWrapper: {
+    height: 80,
+    position: "relative",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  waveContainer: {
+    width: 6,
+    marginHorizontal: 2,
+    justifyContent: "center",
+    alignItems: "center",
+    height: "100%",
+  },
+  waveBar: {
+    width: 4,
+    backgroundColor: "rgba(255, 255, 255, 0.4)",
+    borderRadius: 2,
+  },
+  waveTimeLabel: {
+    position: "absolute",
+    bottom: 4,
+    color: "rgba(255, 255, 255, 0.3)",
+    fontSize: 8,
+  },
+  musicCenterIndicator: {
+    position: "absolute",
+    width: 4,
+    height: 50,
+    backgroundColor: "#ec9a15",
+    borderRadius: 2,
+    zIndex: 10,
+  },
+  musicStatusText: {
+    color: "#888888",
+    fontSize: 12,
+    textAlign: "center",
+    marginTop: 12,
   },
 });
 

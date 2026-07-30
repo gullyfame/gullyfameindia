@@ -39,6 +39,8 @@ const FilteredVideo: React.FC<FilteredVideoProps> = ({
   filter,
   videoRef,
 }) => {
+  console.log('🎥 FilteredVideo: Rendering with source:', source?.uri?.substring(0, 50), 'style:', style);
+  
   const filterOverlayStyle = getFilterOverlayFromProperties(filter || { name: 'Original' });
 
   // Apply brightness/contrast adjustments using opacity overlay
@@ -73,7 +75,10 @@ const FilteredVideo: React.FC<FilteredVideoProps> = ({
   const brightnessOverlayStyle = getBrightnessOverlay();
 
   return (
-    <View style={style}>
+    <View style={style} onLayout={(e) => {
+      const { width, height } = e.nativeEvent.layout;
+      console.log('🎥 FilteredVideo: Container layout:', { width, height });
+    }}>
       <Video
         ref={videoRef as React.RefObject<Video>}
         style={StyleSheet.absoluteFill}
@@ -83,7 +88,10 @@ const FilteredVideo: React.FC<FilteredVideoProps> = ({
         shouldPlay={shouldPlay}
         isLooping={isLooping}
         rate={rate}
-        onLoad={onLoad}
+        onLoad={(status) => {
+          console.log('🎥 FilteredVideo: Video onLoad triggered', status?.isLoaded);
+          onLoad?.(status);
+        }}
         onPlaybackStatusUpdate={onPlaybackStatusUpdate}
         progressUpdateIntervalMillis={progressUpdateIntervalMillis || 100}
         // Performance optimizations

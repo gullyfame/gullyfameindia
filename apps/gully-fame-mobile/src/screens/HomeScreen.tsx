@@ -65,13 +65,13 @@ export default function HomeScreen({ navigation }: any) {
       ]);
 
       if (competitionsRes.success && competitionsRes.data) {
-        setCompetitions(competitionsRes.data);
+        setCompetitions(((competitionsRes.data as any).items || competitionsRes.data) as any);
       }
       if (bannersRes.success && bannersRes.data) {
-        setBanners(bannersRes.data);
+        setBanners(((bannersRes.data as any).items || bannersRes.data) as any);
       }
       if (categoriesRes.success && categoriesRes.data) {
-        setCategories(categoriesRes.data);
+        setCategories(((categoriesRes.data as any).items || categoriesRes.data) as any);
       }
     } catch (error) {
       console.error('Error fetching home data:', error);

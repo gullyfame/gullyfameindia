@@ -23,12 +23,12 @@ import { fanSelfProfileScreenStyles as styles } from "@/styles/fanSelfProfileScr
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Path } from "react-native-svg";
 import { authService } from "@api/services/authService";
-import { useOwnProfile } from "../shared/profileHooks";
+import { useOwnProfile } from "@/components/profile/shared/profileHooks";
 import {
   LevelUpSection,
   StatsSection,
   UserInfoSection,
-} from "../shared/ProfileComponents";
+} from "@/components/profile/shared/ProfileComponents";
 import {
   UserIconSVG,
   HomeIconSVG,

@@ -434,7 +434,7 @@ export const cameraStyles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#ec9a15',
   },
   nextButtonText: {
     color: '#ffffff',

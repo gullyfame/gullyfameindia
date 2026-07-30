@@ -1,3 +1,5 @@
+// File Route: apps/gully-fame-mobile/app/(main)/downloads.tsx
+
 import React, { useState } from "react";
 import {
   View,
@@ -7,169 +9,57 @@ import {
   TouchableOpacity,
   StatusBar,
   Platform,
-  FlatList,
   Image,
-  Dimensions,
+  Alert,
 } from "react-native";
 import { router } from "expo-router";
-import Svg, { Path } from "react-native-svg";
-import { ReelViewer } from "@components/reel/ReelViewer";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 
-const { width, height } = Dimensions.get("window");
-
-import { BackIcon } from "@/icons";
-
-// Mock downloaded reels data
-// ✅ KIRO: Edit by kiro - Commented out video file references (files deleted to reduce build size)
-// Videos will be loaded from backend API in production
-const downloadedReels = [
+// Dummy Downloads Data (Asli app me local file system cache se aayega)
+const initialDownloads = [
   {
-    id: 1,
-    username: "@Suhani0098000",
-    caption: "Good morning everyone #goodmorning",
-    musicName: "On the way - (alan walker)",
-    // ❌ OLD CODE - VIDEO FILE REFERENCE (file deleted)
-    // video: require("@assets/1.mp4"),
-    // ✅ NEW CODE - PLACEHOLDER (will use backend video URL)
-    video: null,
-    image: require("@assets/images/trending_reel1.png"),
-    likes: 134,
-    comments: 23,
-    shares: 12,
-    saves: 45,
-    tips: 12,
-    isLiked: false,
-    isSaved: false,
-    type: "video" as const,
+    id: "1",
+    title: "Insane Gully Rap Battle Finale",
+    duration: "02:45",
+    size: "14.2 MB",
+    author: "@gully_rapper",
+    thumbnail: "https://picsum.photos/seed/rap1/120/120",
   },
   {
-    id: 2,
-    username: "@DancerPro",
-    caption: "Showing off my moves! 💃 #dance",
-    musicName: "Original Sound - DancerPro",
-    // ❌ OLD CODE - VIDEO FILE REFERENCE (file deleted)
-    // video: require("@assets/2.mp4"),
-    // ✅ NEW CODE - PLACEHOLDER (will use backend video URL)
-    video: null,
-    image: require("@assets/images/trending_reel2.png"),
-    likes: 256,
-    comments: 45,
-    shares: 23,
-    saves: 67,
-    tips: 28,
-    isLiked: true,
-    isSaved: false,
-    type: "video" as const,
+    id: "2",
+    title: "Street Popping & Locking Semi-Finals",
+    duration: "01:30",
+    size: "8.5 MB",
+    author: "@dance_mechanics",
+    thumbnail: "https://picsum.photos/seed/dance2/120/120",
   },
   {
-    id: 3,
-    username: "@ChefMaster",
-    caption: "Cooking up something special! 🍳",
-    musicName: "Cooking Vibes - ChefMaster",
-    // ❌ OLD CODE - VIDEO FILE REFERENCE (file deleted)
-    // video: require("@assets/3.mp4"),
-    // ✅ NEW CODE - PLACEHOLDER (will use backend video URL)
-    video: null,
-    image: require("@assets/images/trending_reel3.png"),
-    likes: 189,
-    comments: 32,
-    shares: 15,
-    saves: 89,
-    tips: 15,
-    isLiked: false,
-    isSaved: true,
-    type: "video" as const,
-  },
-  {
-    id: 4,
-    username: "@ComedyKing",
-    caption: "Laugh out loud! 😂 #comedy",
-    musicName: "Funny Moments - ComedyKing",
-    // ❌ OLD CODE - VIDEO FILE REFERENCE (file deleted)
-    // video: require("@assets/4.mp4"),
-    // ✅ NEW CODE - PLACEHOLDER (will use backend video URL)
-    video: null,
-    image: require("@assets/images/trending1.png"),
-    likes: 312,
-    comments: 67,
-    shares: 34,
-    saves: 123,
-    tips: 45,
-    isLiked: true,
-    isSaved: true,
-    type: "video" as const,
-  },
-  {
-    id: 5,
-    username: "@MusicStar",
-    caption: "New track dropping soon! 🎵",
-    musicName: "Original Sound - MusicStar",
-    // ❌ OLD CODE - VIDEO FILE REFERENCE (file deleted)
-    // video: require("@assets/5.mp4"),
-    // ✅ NEW CODE - PLACEHOLDER (will use backend video URL)
-    video: null,
-    image: require("@assets/images/trending2.png"),
-    likes: 445,
-    comments: 89,
-    shares: 56,
-    saves: 156,
-    tips: 67,
-    isLiked: false,
-    isSaved: false,
-    type: "video" as const,
-  },
-  {
-    id: 6,
-    username: "@ArtistLife",
-    caption: "Creating art every day! 🎨",
-    musicName: "Artistic Vibes - ArtistLife",
-    // ❌ OLD CODE - VIDEO FILE REFERENCE (file deleted)
-    // video: require("@assets/6.mp4"),
-    // ✅ NEW CODE - PLACEHOLDER (will use backend video URL)
-    video: null,
-    image: require("@assets/images/trending3.png"),
-    likes: 278,
-    comments: 54,
-    shares: 28,
-    saves: 98,
-    tips: 34,
-    isLiked: true,
-    isSaved: false,
-    type: "video" as const,
+    id: "3",
+    title: "Fastest Beatboxing Tutorial in Hindi",
+    duration: "04:15",
+    size: "22.1 MB",
+    author: "@beatbox_guru",
+    thumbnail: "https://picsum.photos/seed/beat3/120/120",
   },
 ];
 
 export default function DownloadsScreen() {
-  const [selectedReelIndex, setSelectedReelIndex] = useState<number | null>(null);
-  const [showReelViewer, setShowReelViewer] = useState(false);
+  const [downloads, setDownloads] = useState(initialDownloads);
 
-  const handleReelPress = (index: number) => {
-    setSelectedReelIndex(index);
-    setShowReelViewer(true);
-  };
-
-  const handleCloseReelViewer = () => {
-    setShowReelViewer(false);
-    setSelectedReelIndex(null);
-  };
-
-  const renderReelItem = ({
-    item,
-    index,
-  }: {
-    item: (typeof downloadedReels)[0];
-    index: number;
-  }) => {
-    const itemWidth = (width - 60) / 2; // 2 columns with padding
-
-    return (
-      <TouchableOpacity
-        style={[styles.reelItem, { width: itemWidth }]}
-        onPress={() => handleReelPress(index)}
-        activeOpacity={0.8}
-      >
-        <Image source={item.image} style={styles.reelThumbnail} resizeMode="cover" />
-      </TouchableOpacity>
+  const handleDeleteDownload = (id: string, title: string) => {
+    Alert.alert(
+      "Delete Download",
+      `Kya aap "${title}" ko offline downloads se hatana chahte hain?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Delete", 
+          style: "destructive",
+          onPress: () => {
+            setDownloads(downloads.filter(item => item.id !== id));
+          }
+        }
+      ]
     );
   };
 
@@ -180,56 +70,67 @@ export default function DownloadsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <BackIcon />
+          <Ionicons name="chevron-back" size={28} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Downloads</Text>
         <View style={styles.backButton} />
       </View>
 
-      {downloadedReels.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Svg width={80} height={80} viewBox="0 0 24 24" fill="none">
-            <Path
-              d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
-              stroke="#666"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <Path
-              d="M7 10l5 5 5-5M12 15V3"
-              stroke="#666"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </Svg>
-          <Text style={styles.emptyText}>No downloads yet</Text>
-          <Text style={styles.emptySubtext}>Downloaded reels will appear here</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={downloadedReels}
-          renderItem={renderReelItem}
-          keyExtractor={(item) => item.id.toString()}
-          numColumns={2}
-          contentContainerStyle={styles.listContent}
-          columnWrapperStyle={styles.row}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        
+        {downloads.length > 0 ? (
+          <View style={styles.listContainer}>
+            <Text style={styles.storageText}>
+              💾 {downloads.length} Videos Offline Saved ({downloads.reduce((acc, item) => acc + parseFloat(item.size), 0).toFixed(1)} MB Used)
+            </Text>
 
-      {/* Reel Viewer Modal */}
-      {showReelViewer && selectedReelIndex !== null && (
-        <ReelViewer
-          visible={showReelViewer}
-          reels={downloadedReels}
-          initialIndex={selectedReelIndex}
-          onClose={handleCloseReelViewer}
-          hasBottomNav={false}
-          insets={{ top: 0, bottom: 0, left: 0, right: 0 }}
-        />
-      )}
+            {downloads.map((item) => (
+              <View key={item.id} style={styles.downloadCard}>
+                {/* Video Thumbnail with Duration badge */}
+                <View style={styles.thumbnailContainer}>
+                  <Image source={{ uri: item.thumbnail }} style={styles.thumbnail} />
+                  <View style={styles.durationBadge}>
+                    <Text style={styles.durationText}>{item.duration}</Text>
+                  </View>
+                </View>
+
+                {/* Video Info */}
+                <View style={styles.videoInfo}>
+                  <Text style={styles.videoTitle} numberOfLines={2}>{item.title}</Text>
+                  <Text style={styles.videoAuthor}>{item.author}</Text>
+                  <Text style={styles.videoSize}>{item.size}</Text>
+                </View>
+
+                {/* Actions (Play / Delete) */}
+                <View style={styles.actionsContainer}>
+                  <TouchableOpacity style={styles.playButton} activeOpacity={0.7}>
+                    <Ionicons name="play" size={20} color="#fff" />
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={styles.deleteButton} 
+                    onPress={() => handleDeleteDownload(item.id, item.title)}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialIcons name="delete-outline" size={22} color="#FF4444" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="download-outline" size={48} color="#EC9A15" />
+            </View>
+            <Text style={styles.emptyStateTitle}>No Offline Videos</Text>
+            <Text style={styles.emptyStateDesc}>
+              Aapke paas abhi koi downloaded video nahi hai. Videos dekhte waqt download icon par tap karke unhe bina internet ke yahan dekh sakte hain.
+            </Text>
+          </View>
+        )}
+
+      </ScrollView>
     </View>
   );
 }
@@ -256,43 +157,134 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: "#fff",
-    fontSize: 20,
-    fontWeight: "600",
+    fontSize: 22,
+    fontWeight: "700",
+    letterSpacing: 0.5,
   },
-  listContent: {
+  scrollContent: {
     padding: 20,
     paddingBottom: 40,
   },
-  row: {
-    justifyContent: "space-between",
-    marginBottom: 20,
+  storageText: {
+    color: "#EC9A15",
+    fontSize: 13,
+    fontWeight: "600",
+    marginBottom: 16,
+    backgroundColor: "rgba(236, 154, 21, 0.1)",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignSelf: "flex-start",
   },
-  reelItem: {
-    aspectRatio: 9 / 16,
-    borderRadius: 12,
-    overflow: "hidden",
+  listContainer: {
+    gap: 14,
+  },
+  downloadCard: {
+    flexDirection: "row",
     backgroundColor: "#252525",
+    borderRadius: 14,
+    padding: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(236, 154, 21, 0.1)",
   },
-  reelThumbnail: {
+  thumbnailContainer: {
+    position: "relative",
+    width: 80,
+    height: 80,
+    borderRadius: 10,
+    overflow: "hidden",
+    marginRight: 14,
+    backgroundColor: "#1A1A1A",
+  },
+  thumbnail: {
     width: "100%",
     height: "100%",
+    resizeMode: "cover",
   },
-  emptyContainer: {
+  durationBadge: {
+    position: "absolute",
+    bottom: 4,
+    right: 4,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  durationText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "bold",
+  },
+  videoInfo: {
     flex: 1,
+    marginRight: 8,
+  },
+  videoTitle: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 4,
+    lineHeight: 18,
+  },
+  videoAuthor: {
+    color: "#aaa",
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  videoSize: {
+    color: "#666",
+    fontSize: 11,
+    fontWeight: "500",
+  },
+  actionsContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  playButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#EC9A15",
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 40,
   },
-  emptyText: {
+  deleteButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255, 68, 68, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+    paddingHorizontal: 20,
+  },
+  emptyIconCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: "rgba(236, 154, 21, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: "rgba(236, 154, 21, 0.3)",
+  },
+  emptyStateTitle: {
     color: "#fff",
-    fontSize: 18,
-    fontWeight: "600",
-    marginTop: 20,
-    marginBottom: 8,
+    fontSize: 20,
+    fontWeight: "700",
+    marginBottom: 12,
   },
-  emptySubtext: {
-    color: "#999",
+  emptyStateDesc: {
+    color: "#aaa",
     fontSize: 14,
     textAlign: "center",
+    lineHeight: 22,
   },
 });

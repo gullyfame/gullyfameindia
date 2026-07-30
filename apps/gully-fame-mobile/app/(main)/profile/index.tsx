@@ -1,3 +1,5 @@
+// File Route: apps/gully-fame-mobile/app/(main)/profile/index.tsx
+
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useState, useEffect } from "react";
@@ -22,6 +24,8 @@ import {
 } from "@/icons";
 import Svg, { Path, Rect, G } from "react-native-svg";
 import { LinearGradient } from "expo-linear-gradient";
+// Naya Import: Invite icon ke liye Ionicons use kar rahe hain
+import { Ionicons } from '@expo/vector-icons';
 
 const { width, height } = Dimensions.get("window");
 
@@ -153,15 +157,12 @@ export default function MyFameScreen() {
 
     const checkLoginStatus = async () => {
       try {
-        // Check both isLoggedIn flag and token for more reliable auth check
         const [isLoggedIn, token] = await Promise.all([
           AsyncStorage.getItem("isLoggedIn"),
           AsyncStorage.getItem("authToken"),
         ]);
 
         if (isMounted) {
-          // User is logged in if either flag is set OR token exists
-          // This prevents false logouts from public API 401 errors
           if (isLoggedIn !== "true" && !token) {
             router.replace("/auth/signin" as any);
             return;
@@ -171,7 +172,6 @@ export default function MyFameScreen() {
       } catch (error) {
         console.error("Error checking login status:", error);
         if (isMounted) {
-          // On error, check token as fallback before redirecting
           try {
             const token = await AsyncStorage.getItem("authToken");
             if (!token) {
@@ -206,7 +206,6 @@ export default function MyFameScreen() {
   const topThree = leaderboardData.filter((item) => item.isTop);
   const restOfList = leaderboardData.filter((item) => !item.isTop);
 
-  // Show loading state while checking authentication
   if (isLoading) {
     return (
       <View
@@ -224,7 +223,7 @@ export default function MyFameScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
 
-      {/* Header */}
+      {/* Header (Updated with Invite Button) */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => router.back()}
@@ -232,8 +231,17 @@ export default function MyFameScreen() {
         >
           <BackIcon color="white" size={24} />
         </TouchableOpacity>
+        
         <Text style={styles.headerTitle}>Leaderboard</Text>
-        <View style={styles.backButton} />
+        
+        {/* Khali view ko hata kar yahan 'Invite Friend' ka button laga diya hai */}
+        <TouchableOpacity
+          onPress={() => router.push("/(main)/invite-friend" as any)}
+          style={styles.backButton}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="gift-outline" size={26} color="#EC9A15" />
+        </TouchableOpacity>
       </View>
 
       {/* Subtitle */}
@@ -241,7 +249,7 @@ export default function MyFameScreen() {
         🔥 Who&apos;s ruling the gullies right now?
       </Text>
 
-      {/* Top 3 Podium - No Box */}
+      {/* Top 3 Podium */}
       <View style={styles.podiumContainer}>
         <View style={styles.topThreeContainer}>
           {/* Rank 2 - Silver */}
@@ -304,7 +312,6 @@ export default function MyFameScreen() {
             activeOpacity={0.8}
           >
             <View style={styles.avatarContainer}>
-              {/* Crown on top */}
               <Svg
                 width={35}
                 height={35}
@@ -394,7 +401,7 @@ export default function MyFameScreen() {
         </View>
       </View>
 
-      {/* Enhanced Leaderboard - One Unified Container */}
+      {/* Enhanced Leaderboard */}
       <View style={styles.leaderboardSection}>
         <View style={styles.leaderboardListContainer}>
           <ScrollView
@@ -412,15 +419,11 @@ export default function MyFameScreen() {
                 ]}
                 onPress={async () => {
                   if (item.isYou) {
-                    // For own profile, don't pass id so router knows it's own profile
                     router.push({
                       pathname: "/(main)/profile/[id]",
-                      params: {
-                        id: "me",
-                      },
+                      params: { id: "me" },
                     } as any);
                   } else if (item.userId) {
-                    // For other users, pass userId explicitly
                     router.push({
                       pathname: "/(main)/profile/[id]",
                       params: {
@@ -436,7 +439,6 @@ export default function MyFameScreen() {
                 }}
                 activeOpacity={0.8}
               >
-                {/* Rank with gradient background */}
                 <View
                   style={[
                     styles.rankBadgeContainer,
@@ -453,7 +455,6 @@ export default function MyFameScreen() {
                   </Text>
                 </View>
 
-                {/* Avatar with border */}
                 <View style={styles.leaderboardAvatarWrapper}>
                   <Image
                     source={
@@ -468,7 +469,6 @@ export default function MyFameScreen() {
                   )}
                 </View>
 
-                {/* Name and info */}
                 <View style={styles.leaderboardInfo}>
                   <Text
                     style={[
@@ -497,7 +497,6 @@ export default function MyFameScreen() {
                   </View>
                 </View>
 
-                {/* Arrow for current user */}
                 {item.isYou && (
                   <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
                     <Path

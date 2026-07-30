@@ -1,10 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  Dimensions,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import { Dimensions, StyleSheet, View, Text } from 'react-native';
+import Animated, {
+  useAnimatedRef,
+  useSharedValue,
+} from 'react-native-reanimated';
+import Svg, { Path } from 'react-native-svg';
 import type { CameraClip } from '../../types/camera.types';
 import {
   calculateTimelinePositions,
@@ -13,12 +13,13 @@ import {
 import TimelineClip from './TimelineClip';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const TIMELINE_HEIGHT = 60;
-const PIXELS_PER_SECOND = 60; // Base scale: 60 pixels per second of video
+const VIDEO_TRACK_HEIGHT = 60;
+const LAYER_TRACK_HEIGHT = 36;
+const PIXELS_PER_SECOND = 60; // 60 pixels per second of video for smooth scaling
 
 interface MultiClipTimelineProps {
   clips: CameraClip[];
-  currentTime: number; // Current playback time in timeline
+  currentTime: number;
   selectedClipId?: string;
   thumbnails?: Map<string, string>;
   onClipPress?: (clip: CameraClip) => void;
@@ -30,7 +31,8 @@ interface MultiClipTimelineProps {
 }
 
 /**
- * Multi-clip timeline with drag-and-drop, trimming, and scrubbing
+ * CapCut / VN Style Multi-Track Timeline Editor
+ * Automatically generates Text, Voice, and Music layers above the main video track
  */
 const MultiClipTimeline: React.FC<MultiClipTimelineProps> = ({
   clips,
@@ -44,103 +46,134 @@ const MultiClipTimeline: React.FC<MultiClipTimelineProps> = ({
   onTimelineSeek,
   onScroll,
 }) => {
-  const scrollViewRef = useRef<ScrollView>(null);
+  const animatedScrollRef = useAnimatedRef<Animated.ScrollView>();
+  const playheadPosition = useSharedValue(0);
+
   const isDraggingClip = useRef(false);
   const draggedClipIndex = useRef<number | null>(null);
-  const dragStartX = useRef(0);
   const [dragPreviewX, setDragPreviewX] = useState<number | null>(null);
+  const lastScrollTimeRef = useRef(0);
 
-  // Calculate timeline positions
-  const positionedClips = React.useMemo(
-    () => calculateTimelinePositions(clips),
-    [clips]
-  );
-
-  const totalDuration = React.useMemo(
-    () => getTotalTimelineDuration(clips),
-    [clips]
-  );
-
+  // 📈 Calculate master timeline positions
+  const positionedClips = useMemo(() => calculateTimelinePositions(clips), [clips]);
+  const totalDuration = useMemo(() => getTotalTimelineDuration(clips), [clips]);
   const totalWidth = totalDuration * PIXELS_PER_SECOND;
 
-  // Auto-scroll timeline to follow playhead - throttled for performance
-  const lastScrollTimeRef = useRef(0);
-  useEffect(() => {
-    if (!isDraggingClip.current && scrollViewRef.current) {
-      // Throttle scroll updates
-      const now = Date.now();
-      if (now - lastScrollTimeRef.current < 100) return;
-      lastScrollTimeRef.current = now;
-      
-      const playheadX = currentTime * PIXELS_PER_SECOND;
-      const scrollX = Math.max(0, playheadX - SCREEN_WIDTH / 2);
-      scrollViewRef.current.scrollTo({ x: scrollX, animated: false });
-    }
-  }, [currentTime]);
+  // 🚀 EXTRACT MULTI-TRACK LAYERS FROM CLIPS
+  const { textBlocks, voiceBlocks, musicBlocks } = useMemo(() => {
+    const texts: any[] = [];
+    const voices: any[] = [];
+    const musics: any[] = [];
 
-  // Handle clip drag start
+    positionedClips.forEach((clip) => {
+      const clipStart = clip.timelineStart ?? 0;
+      const clipDuration = (clip.timelineEnd ?? 0) - clipStart;
+
+      // Extract Text Overlays
+      (clip.textOverlays || []).forEach((txt, idx) => {
+        texts.push({
+          id: txt.id || `text-${clip.id}-${idx}`,
+          text: txt.text || "Text",
+          start: clipStart,
+          duration: clipDuration, // Currently bounding to clip length
+        });
+      });
+
+      // Extract Voiceovers
+      (clip.voiceOverlays || []).forEach((voice, idx) => {
+        voices.push({
+          id: voice.id || `voice-${clip.id}-${idx}`,
+          name: `Voiceover ${idx + 1}`,
+          start: clipStart,
+          duration: voice.duration || clipDuration,
+        });
+      });
+
+      // Extract Music / SoundFX
+      (clip.soundEffects || []).forEach((snd, idx) => {
+        musics.push({
+          id: snd.id || `music-${clip.id}-${idx}`,
+          name: snd.name || `Audio ${idx + 1}`,
+          start: clipStart,
+          duration: snd.duration || clipDuration,
+        });
+      });
+    });
+
+    return { textBlocks: texts, voiceBlocks: voices, musicBlocks: musics };
+  }, [positionedClips]);
+
+  // ⚡ Sync JS State to UI Thread Scroll Position
+  useEffect(() => {
+    const targetPosition = currentTime * PIXELS_PER_SECOND;
+    playheadPosition.value = targetPosition;
+
+    if (!isDraggingClip.current && animatedScrollRef.current) {
+      const now = Date.now();
+      if (now - lastScrollTimeRef.current > 16) {
+        lastScrollTimeRef.current = now;
+        const scrollX = Math.max(0, targetPosition - SCREEN_WIDTH / 2);
+        animatedScrollRef.current.scrollTo({ x: scrollX, y: 0, animated: false });
+      }
+    }
+  }, [currentTime, playheadPosition, animatedScrollRef]);
+
+  // Drag & Drop Handlers (Original Logic kept intact)
   const handleClipDragStart = useCallback((clip: CameraClip) => {
     const index = clips.findIndex((c) => c.id === clip.id);
     if (index === -1) return;
-    
     isDraggingClip.current = true;
     draggedClipIndex.current = index;
   }, [clips]);
 
-  // Handle clip drag
   const handleClipDrag = useCallback((clip: CameraClip, pageX: number) => {
     if (draggedClipIndex.current === null) return;
-    
-    // Calculate timeline position from screen X
-    // Use pageX directly for drag position
     setDragPreviewX(pageX);
   }, []);
 
-  // Handle clip drag end (reorder)
   const handleClipDragEnd = useCallback((clip: CameraClip) => {
     if (draggedClipIndex.current === null) return;
-    
     const fromIndex = draggedClipIndex.current;
     
-    // Calculate target index based on drag position
-    if (dragPreviewX !== null && scrollViewRef.current) {
+    if (dragPreviewX !== null && animatedScrollRef.current) {
       const targetTime = dragPreviewX / PIXELS_PER_SECOND;
       const targetIndex = positionedClips.findIndex(
         (c) => targetTime >= (c.timelineStart ?? 0) && targetTime < (c.timelineEnd ?? 0)
       );
-      
       if (targetIndex !== -1 && targetIndex !== fromIndex) {
         onClipReorder?.(fromIndex, targetIndex);
       }
     }
-    
     isDraggingClip.current = false;
     draggedClipIndex.current = null;
     setDragPreviewX(null);
-  }, [dragPreviewX, positionedClips, onClipReorder]);
+  }, [dragPreviewX, positionedClips, onClipReorder, animatedScrollRef]);
 
-  // Handle timeline scroll
   const handleScroll = useCallback((event: any) => {
-            const scrollX = (event.nativeEvent as any).contentOffset?.x || 0;
+    const scrollX = event.nativeEvent.contentOffset?.x || 0;
     onScroll?.(scrollX);
   }, [onScroll]);
 
-  // Handle timeline press (seek) - optimized
   const handleTimelinePress = useCallback((event: any) => {
     if (isDraggingClip.current) return;
-    
     const { locationX } = event.nativeEvent;
-    // Calculate time - locationX is relative to the ScrollView content
-    // We need to account for the left padding (SCREEN_WIDTH / 2)
     const time = Math.max(0, (locationX - SCREEN_WIDTH / 2) / PIXELS_PER_SECOND);
-    
     onTimelineSeek?.(Math.max(0, Math.min(time, totalDuration)));
   }, [totalDuration, onTimelineSeek]);
 
+  // Fake waveform renderer for audio tracks
+  const renderWaveform = () => (
+    <View style={{ flexDirection: 'row', alignItems: 'center', opacity: 0.3, overflow: 'hidden', marginLeft: 'auto', marginRight: 8 }}>
+      {Array.from({ length: 20 }).map((_, i) => (
+        <View key={i} style={{ width: 2, height: 8 + Math.random() * 12, backgroundColor: '#fff', marginHorizontal: 1, borderRadius: 2 }} />
+      ))}
+    </View>
+  );
+
   return (
     <View style={styles.container}>
-      <ScrollView
-        ref={scrollViewRef}
+      <Animated.ScrollView
+        ref={animatedScrollRef}
         horizontal
         showsHorizontalScrollIndicator={false}
         scrollEventThrottle={16}
@@ -151,71 +184,144 @@ const MultiClipTimeline: React.FC<MultiClipTimelineProps> = ({
         ]}
         onTouchEnd={handleTimelinePress}
       >
-        {/* Left padding */}
-        <View style={{ width: SCREEN_WIDTH / 2 }} />
+        <View style={styles.multiTrackContainer}>
 
-        {/* Clips */}
-        {positionedClips.map((clip, index) => {
-          const start = clip.timelineStart ?? 0;
-          const end = clip.timelineEnd ?? 0;
-          const clipWidth = (end - start) * PIXELS_PER_SECOND;
-          const thumbnailUri = thumbnails.get(clip.id);
+          {/* 🟪 TRACK 1: Text Layers */}
+          {textBlocks.length > 0 && (
+            <View style={styles.trackRow}>
+              {textBlocks.map((block) => (
+                <View
+                  key={block.id}
+                  style={[styles.layerBlock, styles.textBlock, { left: SCREEN_WIDTH / 2 + block.start * PIXELS_PER_SECOND, width: block.duration * PIXELS_PER_SECOND }]}
+                >
+                  <Text style={styles.layerText} numberOfLines={1}>T  {block.text}</Text>
+                </View>
+              ))}
+            </View>
+          )}
 
-          return (
-            <TimelineClip
-              key={clip.id}
-              clip={clip}
-              width={clipWidth}
-              thumbnailUri={thumbnailUri}
-              isSelected={clip.id === selectedClipId}
-              pixelsPerSecond={PIXELS_PER_SECOND}
-              onPress={onClipPress}
-              onTrimStart={onTrimStart}
-              onTrimEnd={onTrimEnd}
-              onDragStart={handleClipDragStart}
-              onDrag={handleClipDrag}
-              onDragEnd={handleClipDragEnd}
-            />
-          );
-        })}
+          {/* 🟪 TRACK 2: Voiceover Layers */}
+          {voiceBlocks.length > 0 && (
+            <View style={styles.trackRow}>
+              {voiceBlocks.map((block) => (
+                <View
+                  key={block.id}
+                  style={[styles.layerBlock, styles.voiceBlock, { left: SCREEN_WIDTH / 2 + block.start * PIXELS_PER_SECOND, width: block.duration * PIXELS_PER_SECOND }]}
+                >
+                  <Text style={styles.layerText} numberOfLines={1}>🎙️ {block.name}</Text>
+                  {renderWaveform()}
+                </View>
+              ))}
+            </View>
+          )}
 
-        {/* Right padding */}
-        <View style={{ width: SCREEN_WIDTH / 2 }} />
-      </ScrollView>
+          {/* 🟪 TRACK 3: Music Layers */}
+          {musicBlocks.length > 0 && (
+            <View style={styles.trackRow}>
+              {musicBlocks.map((block) => (
+                <View
+                  key={block.id}
+                  style={[styles.layerBlock, styles.musicBlock, { left: SCREEN_WIDTH / 2 + block.start * PIXELS_PER_SECOND, width: block.duration * PIXELS_PER_SECOND }]}
+                >
+                  <Text style={styles.layerText} numberOfLines={1}>🎵 {block.name}</Text>
+                  {renderWaveform()}
+                </View>
+              ))}
+            </View>
+          )}
 
-      {/* Playhead indicator */}
-      <View
-        style={[
-          styles.playhead,
-          { 
-            left: SCREEN_WIDTH / 2 + currentTime * PIXELS_PER_SECOND,
-            transform: [{ translateX: 0 }],
-          },
-        ]}
-        pointerEvents="none"
-      />
+          {/* 🎬 MAIN TRACK: Video Clips (Bottom Most) */}
+          <View style={styles.videoTrackRow}>
+            {/* Center Playhead Left Padding Offset */}
+            <View style={{ width: SCREEN_WIDTH / 2 }} />
+
+            {positionedClips.map((clip) => {
+              const start = clip.timelineStart ?? 0;
+              const end = clip.timelineEnd ?? 0;
+              const clipWidth = (end - start) * PIXELS_PER_SECOND;
+              const thumbnailUri = thumbnails.get(clip.id);
+
+              return (
+                <TimelineClip
+                  key={clip.id}
+                  clip={clip}
+                  width={clipWidth}
+                  thumbnailUri={thumbnailUri}
+                  isSelected={clip.id === selectedClipId}
+                  pixelsPerSecond={PIXELS_PER_SECOND}
+                  onPress={onClipPress}
+                  onTrimStart={onTrimStart}
+                  onTrimEnd={onTrimEnd}
+                  onDragStart={handleClipDragStart}
+                  onDrag={handleClipDrag}
+                  onDragEnd={handleClipDragEnd}
+                />
+              );
+            })}
+
+            {/* Right Padding Offset */}
+            <View style={{ width: SCREEN_WIDTH / 2 }} />
+          </View>
+          
+        </View>
+      </Animated.ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    height: TIMELINE_HEIGHT,
-    backgroundColor: '#000000',
+    flex: 1,
+    backgroundColor: '#111', // Matches the timeline area background
     position: 'relative',
   },
   timelineContent: {
-    paddingVertical: 4,
+    paddingVertical: 10,
+    justifyContent: 'flex-end', // Pushes all tracks to stick together nicely
   },
-  playhead: {
+  multiTrackContainer: {
+    flexDirection: 'column',
+    justifyContent: 'flex-end',
+    gap: 4, // Spacing between tracks
+    height: '100%',
+  },
+  trackRow: {
+    height: LAYER_TRACK_HEIGHT,
+    position: 'relative',
+    width: '100%',
+  },
+  videoTrackRow: {
+    height: VIDEO_TRACK_HEIGHT,
+    flexDirection: 'row',
+    marginTop: 6,
+  },
+  layerBlock: {
     position: 'absolute',
-    top: 0,
-    width: 2,
-    height: TIMELINE_HEIGHT,
-    backgroundColor: '#ec9a15',
-    zIndex: 100,
+    height: '100%',
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
+  layerText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  
+  /* CapCut / VN Exact Style Colors */
+  textBlock: {
+    backgroundColor: '#8B5CF6', // Purple for Text
+  },
+  voiceBlock: {
+    backgroundColor: '#D946EF', // Magenta for Voiceovers
+  },
+  musicBlock: {
+    backgroundColor: '#C026D3', // Pink for Audio/Music
+  }
 });
 
 export default MultiClipTimeline;
-

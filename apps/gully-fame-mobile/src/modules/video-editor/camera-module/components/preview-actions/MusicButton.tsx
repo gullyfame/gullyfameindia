@@ -6,9 +6,6 @@ interface MusicButtonProps {
   onPress?: () => void;
 }
 
-/**
- * Music button component for preview editor
- */
 const MusicButton: React.FC<MusicButtonProps> = ({ onPress }) => {
   return (
     <TouchableOpacity style={styles.button} onPress={onPress} activeOpacity={0.7}>
@@ -23,7 +20,18 @@ const MusicButton: React.FC<MusicButtonProps> = ({ onPress }) => {
           />
         </Svg>
       </View>
-      <Text style={styles.label}>Music</Text>
+
+      <View style={styles.labelWrap}>
+        <Text
+          style={styles.label}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.9}
+        >
+          Music
+        </Text>
+        
+      </View>
     </TouchableOpacity>
   );
 };
@@ -32,6 +40,7 @@ const styles = StyleSheet.create({
   button: {
     alignItems: 'center',
     gap: 6,
+    width: 56,
   },
   iconContainer: {
     width: 36,
@@ -41,12 +50,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  labelWrap: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   label: {
     color: '#ffffff',
-    fontSize: 10,
+    fontSize: 11,
+    lineHeight: 14,
     fontWeight: '500',
+    textAlign: 'center',
+    includeFontPadding: false,
   },
 });
 
 export default MusicButton;
-

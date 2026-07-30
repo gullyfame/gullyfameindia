@@ -1,257 +1,195 @@
-import React, { useState, useEffect } from 'react';
+// File Route: apps/gully-fame-mobile/app/(main)/settings/kyc-status.tsx
+
+import React, { useState } from "react";
 import {
   View,
   Text,
-  ScrollView,
   StyleSheet,
-  ActivityIndicator,
-  RefreshControl,
-  Image,
+  ScrollView,
   TouchableOpacity,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
-import { getUserKycStatus } from '../../../src/api/services/userService';
-import type { KycStatus } from '../../../src/api/services/userService';
-import { navigateToKycStep } from '../../../src/utils/kycValidation';
+  StatusBar,
+  Platform,
+} from "react-native";
+import { router } from "expo-router";
+import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 
-export default function KycStatusScreen() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const [kyc, setKyc] = useState<KycStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+// Types of KYC Status: 'unverified' | 'pending' | 'verified' | 'rejected'
+export default function KYCStatusScreen() {
+  // Demo ke liye abhi 'pending' set kiya hai. Aap isse change karke dekh sakte hain.
+  const [status, setStatus] = useState<"unverified" | "pending" | "verified" | "rejected">("pending");
 
-  useEffect(() => {
-    fetchKycStatus();
-  }, []);
-
-  // Refresh status when screen comes into focus (e.g., after completing KYC flow)
-  useFocusEffect(
-    React.useCallback(() => {
-      fetchKycStatus();
-    }, [])
-  );
-
-  const fetchKycStatus = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const result = await getUserKycStatus();
-      
-      if (result.success && result.data) {
-        setKyc(result.data);
-      } else {
-        setError(result.message || 'Failed to fetch KYC status');
-        // If no KYC found, set pending status
-        setKyc({ status: 'pending' });
-      }
-    } catch (err: any) {
-      console.error('Error fetching KYC status:', err);
-      setError(err.message || 'Failed to load KYC status');
-      setKyc({ status: 'pending' });
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchKycStatus();
-  };
-
-  const getStatusColor = (status?: string) => {
+  const renderStatusCard = () => {
     switch (status) {
-      case 'approved':
-        return '#10B981'; // green
-      case 'rejected':
-        return '#EF4444'; // red
-      case 'completed':
-        return '#3B82F6'; // blue
+      case "pending":
+        return (
+          <LinearGradient
+            colors={['rgba(236, 154, 21, 0.15)', 'rgba(236, 154, 21, 0.05)']}
+            style={[styles.statusCard, { borderColor: '#EC9A15' }]}
+          >
+            <View style={styles.iconGlowPending}>
+              <MaterialCommunityIcons name="clock-fast" size={48} color="#EC9A15" />
+            </View>
+            <Text style={styles.statusTitle}>Verification Pending</Text>
+            <Text style={styles.statusDesc}>
+              Aapke documents humari team review kar rahi hai. Isme aamtaur par 24-48 ghante lagte hain.
+            </Text>
+          </LinearGradient>
+        );
+      case "verified":
+        return (
+          <LinearGradient
+            colors={['rgba(37, 211, 102, 0.15)', 'rgba(37, 211, 102, 0.05)']}
+            style={[styles.statusCard, { borderColor: '#25D366' }]}
+          >
+            <View style={styles.iconGlowVerified}>
+              <MaterialCommunityIcons name="shield-check" size={48} color="#25D366" />
+            </View>
+            <Text style={styles.statusTitle}>Fully Verified</Text>
+            <Text style={styles.statusDesc}>
+              Congratulations! Aapka account verified hai. Ab aap bina kisi limit ke withdrawals kar sakte hain.
+            </Text>
+          </LinearGradient>
+        );
+      case "rejected":
+        return (
+          <LinearGradient
+            colors={['rgba(255, 68, 68, 0.15)', 'rgba(255, 68, 68, 0.05)']}
+            style={[styles.statusCard, { borderColor: '#ff4444' }]}
+          >
+            <View style={styles.iconGlowRejected}>
+              <MaterialCommunityIcons name="shield-alert" size={48} color="#ff4444" />
+            </View>
+            <Text style={styles.statusTitle}>Verification Failed</Text>
+            <Text style={styles.statusDesc}>
+              Aapke documents clear nahi the ya details mismatch ho rahi thi. Kripya dobara submit karein.
+            </Text>
+            <TouchableOpacity style={styles.actionButton} activeOpacity={0.8}>
+              <Text style={styles.actionButtonText}>Re-Submit Documents</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        );
       default:
-        return '#F59E0B'; // yellow
+        return (
+          <LinearGradient
+            colors={['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.02)']}
+            style={[styles.statusCard, { borderColor: '#666' }]}
+          >
+            <View style={styles.iconGlowUnverified}>
+              <MaterialCommunityIcons name="shield-off-outline" size={48} color="#ccc" />
+            </View>
+            <Text style={styles.statusTitle}>Account Unverified</Text>
+            <Text style={styles.statusDesc}>
+              Apni winnings ko bank me withdraw karne ke liye aapko apni KYC puri karni hogi.
+            </Text>
+            <TouchableOpacity 
+              style={styles.actionButtonGold} 
+              activeOpacity={0.8}
+              onPress={() => setStatus("pending")} // Demo click
+            >
+              <Text style={styles.actionButtonTextGold}>Start Verification</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        );
     }
   };
-
-  const getStatusText = (status?: string) => {
-    switch (status) {
-      case 'approved':
-        return 'Approved';
-      case 'rejected':
-        return 'Rejected';
-      case 'completed':
-        return 'Completed';
-      default:
-        return 'Pending';
-    }
-  };
-
-  if (loading && !kyc) {
-    return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>KYC Status</Text>
-        </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#EC9A15" />
-          <Text style={styles.loadingText}>Loading KYC status...</Text>
-        </View>
-      </View>
-    );
-  }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#3C2610" />
+
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>KYC Status</Text>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={28} color="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>KYC Verification</Text>
+        <View style={styles.backButton} />
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        {/* Status Badge */}
-        <View style={styles.statusCard}>
-          {kyc?.status === 'pending' || kyc?.status === undefined ? (
-            <TouchableOpacity
-              style={[styles.statusBadge, { backgroundColor: getStatusColor(kyc?.status) }]}
-              onPress={async () => {
-                // Navigate to the appropriate incomplete step
-                await navigateToKycStep();
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.statusText}>{getStatusText(kyc?.status)}</Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(kyc?.status) }]}>
-              <Text style={styles.statusText}>{getStatusText(kyc?.status)}</Text>
-            </View>
-          )}
-
-          {kyc?.status === 'approved' && (
-            <Text style={styles.successMessage}>
-              Your KYC verification has been approved. You can now access all features.
-            </Text>
-          )}
-
-          {kyc?.status === 'completed' && (
-            <Text style={styles.successMessage}>
-              Your KYC verification is completed. You can now access all features.
-            </Text>
-          )}
-
-          {kyc?.status === 'rejected' && kyc.rejectionReason && (
-            <View style={styles.rejectionContainer}>
-              <Text style={styles.rejectionTitle}>Rejection Reason:</Text>
-              <Text style={styles.rejectionReason}>{kyc.rejectionReason}</Text>
-              <Text style={styles.rejectionNote}>
-                Please submit your documents again with the required corrections.
-              </Text>
-            </View>
-          )}
-
-          {(kyc?.status === 'pending' || kyc?.status === undefined) && (
-            <View>
-              <Text style={styles.pendingMessage}>
-                Tap the "Pending" button above to complete your verification steps.
-              </Text>
-              <Text style={styles.pendingSubMessage}>
-                Complete all required steps to verify your account automatically.
-              </Text>
-            </View>
-          )}
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        
+        {/* Security Banner */}
+        <View style={styles.securityBanner}>
+          <FontAwesome5 name="lock" size={14} color="#25D366" />
+          <Text style={styles.securityText}>Bank-grade 256-bit encryption. Your data is 100% secure.</Text>
         </View>
 
-        {/* Submission Date */}
-        {kyc?.submittedAt && (
-          <View style={styles.infoCard}>
-            <Text style={styles.infoLabel}>Submitted On</Text>
-            <Text style={styles.infoValue}>
-              {new Date(kyc.submittedAt).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
-            </Text>
-          </View>
-        )}
+        {/* Dynamic Status Card */}
+        {renderStatusCard()}
 
-        {/* Review Date */}
-        {kyc?.reviewedAt && (
-          <View style={styles.infoCard}>
-            <Text style={styles.infoLabel}>Reviewed On</Text>
-            <Text style={styles.infoValue}>
-              {new Date(kyc.reviewedAt).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
-            </Text>
-          </View>
-        )}
-
-        {/* Documents */}
-        {kyc?.documents && kyc.documents.length > 0 && (
-          <View style={styles.documentsContainer}>
-            <Text style={styles.sectionTitle}>Submitted Documents</Text>
-            {kyc.documents.map((doc: any, index: number) => (
-              <View key={index} style={styles.documentCard}>
-                <Text style={styles.documentType}>
-                  {doc.documentType || 'Document'} {doc.documentNumber ? `- ${doc.documentNumber}` : ''}
-                </Text>
-                <View style={styles.documentImages}>
-                  {doc.frontImage && (
-                    <View style={styles.imageContainer}>
-                      <Image
-                        source={{ uri: doc.frontImage }}
-                        style={styles.documentImage}
-                        resizeMode="contain"
-                      />
-                      <Text style={styles.imageLabel}>Front</Text>
-                    </View>
-                  )}
-                  {doc.backImage && (
-                    <View style={styles.imageContainer}>
-                      <Image
-                        source={{ uri: doc.backImage }}
-                        style={styles.documentImage}
-                        resizeMode="contain"
-                      />
-                      <Text style={styles.imageLabel}>Back</Text>
-                    </View>
-                  )}
-                  {doc.selfieImage && (
-                    <View style={styles.imageContainer}>
-                      <Image
-                        source={{ uri: doc.selfieImage }}
-                        style={styles.documentImage}
-                        resizeMode="contain"
-                      />
-                      <Text style={styles.imageLabel}>Selfie</Text>
-                    </View>
-                  )}
-                </View>
+        {/* Verification Steps Timeline */}
+        <Text style={styles.sectionTitle}>Verification Steps</Text>
+        
+        <View style={styles.stepsContainer}>
+          {/* Step 1: Phone (Always done if they are here) */}
+          <View style={styles.stepRow}>
+            <View style={styles.stepIndicator}>
+              <View style={[styles.stepDot, styles.stepDotCompleted]}>
+                <Ionicons name="checkmark" size={16} color="#fff" />
               </View>
-            ))}
+              <View style={[styles.stepLine, styles.stepLineCompleted]} />
+            </View>
+            <View style={styles.stepContent}>
+              <Text style={styles.stepTitle}>Mobile Verification</Text>
+              <Text style={styles.stepDesc}>OTP verified successfully</Text>
+            </View>
           </View>
-        )}
 
-        {error && !kyc && (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
-            <Text style={styles.retryText} onPress={fetchKycStatus}>
-              Tap to retry
-            </Text>
+          {/* Step 2: Document */}
+          <View style={styles.stepRow}>
+            <View style={styles.stepIndicator}>
+              <View style={[
+                styles.stepDot, 
+                status === 'verified' || status === 'pending' ? styles.stepDotCompleted : styles.stepDotPending
+              ]}>
+                {status === 'verified' || status === 'pending' ? (
+                  <Ionicons name="checkmark" size={16} color="#fff" />
+                ) : (
+                  <Text style={styles.stepNumber}>2</Text>
+                )}
+              </View>
+              <View style={[
+                styles.stepLine, 
+                status === 'verified' || status === 'pending' ? styles.stepLineCompleted : styles.stepLinePending
+              ]} />
+            </View>
+            <View style={styles.stepContent}>
+              <Text style={styles.stepTitle}>Identity Document</Text>
+              <Text style={styles.stepDesc}>
+                {status === 'verified' ? 'PAN/Aadhaar verified' : status === 'pending' ? 'Document under review' : 'Upload PAN or Aadhaar card'}
+              </Text>
+            </View>
           </View>
-        )}
+
+          {/* Step 3: Face Scan */}
+          <View style={styles.stepRow}>
+            <View style={styles.stepIndicator}>
+              <View style={[
+                styles.stepDot, 
+                status === 'verified' ? styles.stepDotCompleted : styles.stepDotPending
+              ]}>
+                {status === 'verified' ? (
+                  <Ionicons name="checkmark" size={16} color="#fff" />
+                ) : (
+                  <Text style={styles.stepNumber}>3</Text>
+                )}
+              </View>
+            </View>
+            <View style={[styles.stepContent, { paddingBottom: 0 }]}>
+              <Text style={styles.stepTitle}>Selfie Verification</Text>
+              <Text style={styles.stepDesc}>
+                {status === 'verified' ? 'Face matched successfully' : 'Take a live selfie to match document'}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Support Link */}
+        <TouchableOpacity style={styles.supportLink} onPress={() => router.push("/(main)/settings/help-support" as any)}>
+          <Text style={styles.supportText}>Need help with verification? <Text style={styles.supportHighlight}>Contact Support</Text></Text>
+        </TouchableOpacity>
+
       </ScrollView>
     </View>
   );
@@ -260,173 +198,225 @@ export default function KycStatusScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: "#3C2610", // Premium Gully Fame Background
+    paddingTop: Platform.OS === "android" ? 20 : 0,
   },
   header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#1a1a1a',
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    paddingTop: Platform.OS === "ios" ? 60 : 20,
+    paddingBottom: 20,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    justifyContent: "center",
+    alignItems: "center",
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#fff',
+    color: "#fff",
+    fontSize: 22,
+    fontWeight: "700",
+    letterSpacing: 0.5,
   },
-  scrollView: {
-    flex: 1,
-  },
-  content: {
+  scrollContent: {
     padding: 20,
+    paddingBottom: 40,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  securityBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(37, 211, 102, 0.1)",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "rgba(37, 211, 102, 0.2)",
+    gap: 8,
   },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#999',
+  securityText: {
+    color: "#25D366",
+    fontSize: 12,
+    fontWeight: "600",
   },
   statusCard: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 20,
+    borderRadius: 24,
+    padding: 30,
+    alignItems: "center",
+    borderWidth: 1,
+    marginBottom: 30,
+  },
+  iconGlowPending: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: "rgba(236, 154, 21, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 16,
-    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: "rgba(236, 154, 21, 0.3)",
   },
-  statusBadge: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 20,
+  iconGlowVerified: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: "rgba(37, 211, 102, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 16,
+    borderWidth: 2,
+    borderColor: "rgba(37, 211, 102, 0.3)",
   },
-  statusText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-    textTransform: 'uppercase',
+  iconGlowRejected: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: "rgba(255, 68, 68, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: "rgba(255, 68, 68, 0.3)",
   },
-  successMessage: {
-    fontSize: 14,
-    color: '#10B981',
-    textAlign: 'center',
-    marginTop: 8,
+  iconGlowUnverified: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: "rgba(255, 255, 255, 0.1)",
   },
-  rejectionContainer: {
-    marginTop: 16,
-    padding: 16,
-    backgroundColor: '#1f1f1f',
-    borderRadius: 8,
-    width: '100%',
-  },
-  rejectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#EF4444',
+  statusTitle: {
+    color: "#fff",
+    fontSize: 24,
+    fontWeight: "bold",
     marginBottom: 8,
   },
-  rejectionReason: {
+  statusDesc: {
+    color: "#ccc",
     fontSize: 14,
-    color: '#fff',
-    marginBottom: 12,
-    lineHeight: 20,
+    textAlign: "center",
+    lineHeight: 22,
+    paddingHorizontal: 10,
   },
-  rejectionNote: {
-    fontSize: 12,
-    color: '#999',
-    fontStyle: 'italic',
-  },
-  pendingMessage: {
-    fontSize: 14,
-    color: '#F59E0B',
-    textAlign: 'center',
-    marginTop: 8,
-    fontWeight: '500',
-  },
-  pendingSubMessage: {
-    fontSize: 12,
-    color: '#999',
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  infoCard: {
-    backgroundColor: '#1a1a1a',
+  actionButtonGold: {
+    backgroundColor: "#EC9A15",
+    paddingVertical: 14,
+    paddingHorizontal: 30,
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    marginTop: 20,
+    width: "100%",
+    alignItems: "center",
+    shadowColor: "#EC9A15",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  infoLabel: {
-    fontSize: 12,
-    color: '#999',
-    marginBottom: 4,
-  },
-  infoValue: {
+  actionButtonTextGold: {
+    color: "#fff",
     fontSize: 16,
-    color: '#fff',
-    fontWeight: '500',
+    fontWeight: "bold",
   },
-  documentsContainer: {
-    marginTop: 8,
+  actionButton: {
+    backgroundColor: "#ff4444",
+    paddingVertical: 14,
+    paddingHorizontal: 30,
+    borderRadius: 12,
+    marginTop: 20,
+    width: "100%",
+    alignItems: "center",
+  },
+  actionButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
   },
   sectionTitle: {
+    color: "#fff",
     fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 16,
+    fontWeight: "700",
+    marginBottom: 20,
   },
-  documentCard: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+  stepsContainer: {
+    backgroundColor: "#252525",
+    borderRadius: 20,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: "rgba(236, 154, 21, 0.1)",
   },
-  documentType: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 12,
+  stepRow: {
+    flexDirection: "row",
   },
-  documentImages: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+  stepIndicator: {
+    alignItems: "center",
+    marginRight: 16,
   },
-  imageContainer: {
-    flex: 1,
-    minWidth: '45%',
+  stepDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 2,
   },
-  documentImage: {
-    width: '100%',
-    height: 150,
-    borderRadius: 8,
-    backgroundColor: '#0a0a0a',
+  stepDotCompleted: {
+    backgroundColor: "#25D366",
   },
-  imageLabel: {
+  stepDotPending: {
+    backgroundColor: "#333",
+    borderWidth: 1,
+    borderColor: "#666",
+  },
+  stepNumber: {
+    color: "#aaa",
     fontSize: 12,
-    color: '#999',
-    marginTop: 4,
-    textAlign: 'center',
+    fontWeight: "bold",
   },
-  errorContainer: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
+  stepLine: {
+    width: 2,
+    height: 40,
+    marginVertical: 4,
   },
-  errorText: {
+  stepLineCompleted: {
+    backgroundColor: "#25D366",
+  },
+  stepLinePending: {
+    backgroundColor: "#444",
+  },
+  stepContent: {
+    flex: 1,
+    paddingBottom: 24,
+  },
+  stepTitle: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  stepDesc: {
+    color: "#999",
+    fontSize: 13,
+  },
+  supportLink: {
+    marginTop: 30,
+    alignItems: "center",
+  },
+  supportText: {
+    color: "#aaa",
     fontSize: 14,
-    color: '#EF4444',
-    textAlign: 'center',
-    marginBottom: 12,
   },
-  retryText: {
-    fontSize: 14,
-    color: '#EC9A15',
-    textDecorationLine: 'underline',
+  supportHighlight: {
+    color: "#EC9A15",
+    fontWeight: "bold",
+    textDecorationLine: "underline",
   },
 });
-
-

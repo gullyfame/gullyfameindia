@@ -1,28 +1,31 @@
-import { CameraView } from "expo-camera";
-import * as ImagePicker from "expo-image-picker";
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, SafeAreaView, Text, TouchableOpacity, View } from "react-native";
-import BackArrow from "../components/BackArrow";
-import CameraSwitchButton from "../components/CameraSwitchButton";
-import CaptureButton from "../components/CaptureButton";
-import ClipList from "../components/ClipList";
-import ClipPlayerOverlay from "../components/ClipPlayerOverlay";
-import FlashToggle from "../components/FlashToggle";
-import GalleryButton from "../components/GalleryButton";
-import HDSelector, {
-  type ColorMode,
-  type FrameRate,
-  type Resolution,
-} from "../components/HDSelector";
-import ModeToggle from "../components/ModeToggle";
-import SpeedSelector, { type SpeedMultiplier } from "../components/SpeedSelector";
-import TimerSelector, { type TimerDuration } from "../components/TimerSelector";
-import ZoomSlider from "../components/ZoomSlider";
-import { useCamera } from "../hooks/useCamera";
-import { usePermissions } from "../hooks/usePermissions";
-import { cameraStyles } from "../styles/cameraStyles";
-import type { CameraClip, CameraClipArray, SpeedSegment } from "../types/camera.types";
-import { CameraModeEnum, FlashModeEnum } from "../utils/mediaTypes";
+// PATH: apps/gully-fame-mobile/src/modules/video-editor/camera-module/screens/CameraScreen.tsx
+
+import { CameraView } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import {
+  ActivityIndicator,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import CameraSwitchButton from '../components/CameraSwitchButton';
+import CaptureButton from '../components/CaptureButton';
+import ClipPlayerOverlay from '../components/ClipPlayerOverlay';
+import FlashToggle from '../components/FlashToggle';
+import GalleryButton from '../components/GalleryButton';
+import HDSelector, { type ColorMode, type FrameRate, type Resolution } from '../components/HDSelector';
+import SpeedSelector, { type SpeedMultiplier } from '../components/SpeedSelector';
+import TimerSelector, { type TimerDuration } from '../components/TimerSelector';
+import MusicLibraryModal from '../components/MusicLibraryModal';
+import { useCamera } from '../hooks/useCamera';
+import { usePermissions } from '../hooks/usePermissions';
+import { cameraStyles } from '../styles/cameraStyles';
+import type { CameraClip, CameraClipArray, SpeedSegment } from '../types/camera.types';
+import { CameraModeEnum, FlashModeEnum } from '../utils/mediaTypes';
 
 interface CameraScreenProps {
   onBack: () => void;
@@ -30,384 +33,196 @@ interface CameraScreenProps {
   initialClips?: CameraClipArray;
 }
 
-/**
- * Full-screen camera view with:
- * - Top bar: back button, Photo/Video toggle, flash toggle
- * - Middle: live camera preview
- * - Bottom: circular capture / record button
- */
+// type UIMode = 'POST' | 'STORY' | 'REEL' | 'LIVE';
+
+type UIMode =  'REEL' | 'LIVE';
+
+
 const CameraScreen: React.FC<CameraScreenProps> = ({ onBack, onNext, initialClips = [] }) => {
-  const [mode, setMode] = useState<CameraModeEnum>(CameraModeEnum.Photo);
+  const [uiMode, setUiMode] = useState<UIMode>('REEL');
+  const mode = (uiMode === 'REEL' || uiMode === 'LIVE') ? CameraModeEnum.Video : CameraModeEnum.Photo;
+
   const [flash, setFlash] = useState<FlashModeEnum>(FlashModeEnum.Off);
   const [clips, setClips] = useState<CameraClipArray>(initialClips);
+  const [isMusicSheetVisible, setIsMusicSheetVisible] = useState(false);
 
-  // Update clips when initialClips prop changes (when navigating back from preview)
-  // This ensures deleted clips from preview screen are reflected in camera screen
-  React.useEffect(() => {
-    if (initialClips) {
-      setClips(initialClips);
-    }
+  useEffect(() => {
+    if (initialClips) setClips(initialClips);
   }, [initialClips]);
+  
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [activeClip, setActiveClip] = useState<CameraClip | null>(null);
   const [timerDuration, setTimerDuration] = useState<TimerDuration>(15);
   const [speed, setSpeed] = useState<SpeedMultiplier>(1);
-
-  // Track speed changes during recording
+  
   const recordingStartTimeRef = useRef<number | null>(null);
   const speedChangesRef = useRef<Array<{ time: number; speed: number }>>([]);
   const currentSpeedRef = useRef<SpeedMultiplier>(speed);
-  const [cameraFacing, setCameraFacing] = useState<"front" | "back">("back");
+  const [cameraFacing, setCameraFacing] = useState<'front' | 'back'>('front');
   const [isHoldingCapture, setIsHoldingCapture] = useState(false);
-  const [zoom, setZoom] = useState(1); // Zoom level: 1x to 4x
-  const [gridEnabled, setGridEnabled] = useState(false); // Grid overlay toggle
-  const [resolution, setResolution] = useState<Resolution>("hd");
+  const [zoom, setZoom] = useState(1); 
+  const [gridEnabled, setGridEnabled] = useState(false); 
+  const [resolution, setResolution] = useState<Resolution>('hd');
   const [frameRate, setFrameRate] = useState<FrameRate>(30);
-  const [colorMode, setColorMode] = useState<ColorMode>("sdr");
+  const [colorMode, setColorMode] = useState<ColorMode>('sdr');
 
   const { hasPermission, isRequesting, requestPermissions } = usePermissions();
-  const { cameraRef, isRecording, takePhoto, startRecording, stopRecording } = useCamera(
-    mode,
-    flash
-  );
+  const { cameraRef, isRecording, takePhoto, startRecording, stopRecording } = useCamera(mode, flash);
+  
+  const totalClipsDuration = useMemo(() => clips.reduce((acc, clip) => acc + clip.duration, 0), [clips]);
+  const currentTotalDuration = isRecording ? totalClipsDuration + recordingSeconds : totalClipsDuration;
+  const progress = timerDuration > 0 ? currentTotalDuration / timerDuration : 0;
+  
+  const hasClips = clips.length > 0;
 
-  // Keep currentSpeedRef in sync with speed state (when not recording)
   useEffect(() => {
-    if (!isRecording) {
-      currentSpeedRef.current = speed;
-    }
+    if (!isRecording) currentSpeedRef.current = speed;
   }, [speed, isRecording]);
 
-  const handleChangeMode = useCallback((nextMode: CameraModeEnum) => {
-    // IMPORTANT: switching mode does NOT clear existing clips.
-    setMode(nextMode);
-  }, []);
-
   const handleSwitchCamera = useCallback(() => {
-    setCameraFacing((prev) => (prev === "front" ? "back" : "front"));
-    setZoom(1); // Reset zoom when switching camera
+    setCameraFacing(prev => (prev === 'front' ? 'back' : 'front'));
+    setZoom(1); 
   }, []);
 
-  // Convert zoom level (1-4x) to normalized zoom (0-1) for expo-camera
-  // expo-camera uses normalized zoom: 0 = no zoom, 1 = max zoom
-  // We map: 1x = 0, 2x = 0.33, 3x = 0.67, 4x = 1.0
-  const normalizedZoom = React.useMemo(() => {
-    return Math.min(Math.max((zoom - 1) / 3, 0), 1);
-  }, [zoom]);
-
-  const handleZoomChange = useCallback((newZoom: number) => {
-    setZoom(newZoom);
-  }, []);
-
-  const handleToggleGrid = useCallback(() => {
-    setGridEnabled((prev) => !prev);
-  }, []);
+  const normalizedZoom = React.useMemo(() => Math.min(Math.max((zoom - 1) / 3, 0), 1), [zoom]);
+  const handleToggleGrid = useCallback(() => setGridEnabled(prev => !prev), []);
 
   const handleAddClip = useCallback((clip: CameraClip | null) => {
     if (!clip) {
-      // Reset tracking even if clip is null
       recordingStartTimeRef.current = null;
       speedChangesRef.current = [];
       return;
     }
-
-    // Build speed segments if we have speed changes recorded
-    if (clip.type === "video" && recordingStartTimeRef.current !== null) {
-      // Calculate recording duration from start time to now
+    
+    if (clip.type === 'video' && recordingStartTimeRef.current !== null) {
       const recordingDuration = (Date.now() - recordingStartTimeRef.current) / 1000;
-      // Use clip.duration if available and valid, otherwise use recording duration
       let videoDuration = clip.duration > 0 ? clip.duration : recordingDuration;
-
-      // Update clip duration if it was 0 (video metadata not available yet)
-      if (clip.duration === 0 && recordingDuration > 0) {
-        clip.duration = recordingDuration;
-      }
-      const changes = [...speedChangesRef.current]; // Copy array before processing
-
-      console.log("Building speed segments:", {
-        clipDuration: clip.duration,
-        recordingDuration,
-        videoDuration,
-        speedChangesCount: changes.length,
-        speedChanges: changes,
-        currentSpeed: currentSpeedRef.current,
-      });
-
-      // Build segments from speed changes
+      if (clip.duration === 0 && recordingDuration > 0) clip.duration = recordingDuration;
+      
+      const changes = [...speedChangesRef.current]; 
       if (changes.length > 0 && videoDuration > 0) {
         const segments: SpeedSegment[] = [];
-
-        // Process each speed change to create segments
         for (let i = 0; i < changes.length; i++) {
           const change = changes[i];
           const startTime = Math.min(Math.max(change.time, 0), videoDuration);
-          const speed = change.speed;
-
-          // Determine end time: next change time or video duration
-          let endTime: number;
-          if (i < changes.length - 1) {
-            endTime = Math.min(Math.max(changes[i + 1].time, startTime), videoDuration);
-          } else {
-            endTime = videoDuration;
-          }
-
-          // Only add segment if it has valid duration
-          if (endTime > startTime) {
-            segments.push({
-              startTime,
-              endTime,
-              speed,
-            });
-          }
+          let endTime = (i < changes.length - 1) ? Math.min(Math.max(changes[i + 1].time, startTime), videoDuration) : videoDuration;
+          if (endTime > startTime) segments.push({ startTime, endTime, speed: change.speed });
         }
-
-        console.log("Created segments:", segments);
-
-        // If we have segments and they're not all at 1x or if there are multiple segments
-        const hasNonDefaultSpeed = segments.some((seg) => seg.speed !== 1);
-        if (segments.length > 0 && (segments.length > 1 || hasNonDefaultSpeed)) {
-          clip.speedSegments = segments;
-          console.log("Applied speedSegments to clip:", clip.speedSegments);
-        } else {
-          console.log("Segments not applied - all 1x or empty");
-        }
+        if (segments.some(seg => seg.speed !== 1) || segments.length > 1) clip.speedSegments = segments;
       } else if (currentSpeedRef.current !== 1 && videoDuration > 0) {
-        // Single speed that's not 1x - create single segment
-        clip.speedSegments = [
-          {
-            startTime: 0,
-            endTime: videoDuration,
-            speed: currentSpeedRef.current,
-          },
-        ];
-        console.log("Applied single speed segment:", clip.speedSegments);
+        clip.speedSegments = [{ startTime: 0, endTime: videoDuration, speed: currentSpeedRef.current }];
       }
-    } else if (clip.type === "video") {
-      console.log("Video clip but no recording tracking data");
     }
-
-    // Reset recording tracking AFTER building segments
-    const wasTracking = recordingStartTimeRef.current !== null;
-    const trackingStartTime = recordingStartTimeRef.current;
+    
     recordingStartTimeRef.current = null;
     speedChangesRef.current = [];
-
-    console.log("Final clip data:", {
-      id: clip.id,
-      duration: clip.duration,
-      speedSegments: clip.speedSegments,
-      speed: clip.speed,
-      hadTracking: wasTracking,
-      trackingStartTime,
-    });
-
-    setClips((prev) => [...prev, clip]);
+    setClips(prev => [...prev, clip]);
   }, []);
 
-  const handleCapturePressIn = useCallback(() => {
-    setIsHoldingCapture(true);
-  }, []);
+  const handleCapturePressIn = useCallback(() => setIsHoldingCapture(true), []);
 
   const handleCapturePressOut = useCallback(async () => {
     const wasHolding = isHoldingCapture;
     setIsHoldingCapture(false);
-
-    // For photo mode: capture when released (only if it was a hold, not a tap)
     if (mode === CameraModeEnum.Photo && wasHolding) {
       const clip = await takePhoto();
       handleAddClip(clip);
     }
   }, [mode, isHoldingCapture, takePhoto, handleAddClip]);
 
-  const handleToggleFlash = useCallback(() => {
-    setFlash((current) => (current === FlashModeEnum.On ? FlashModeEnum.Off : FlashModeEnum.On));
-  }, []);
+  const handleToggleFlash = useCallback(() => setFlash(current => current === FlashModeEnum.On ? FlashModeEnum.Off : FlashModeEnum.On), []);
 
-  const handleDeleteClip = useCallback((id: string) => {
-    setClips((prev) => prev.filter((clip) => clip.id !== id));
-  }, []);
-
-  const handleOpenClip = useCallback((clip: CameraClip) => {
-    setActiveClip(clip);
-  }, []);
-
-  const handleCloseClip = useCallback(() => {
-    setActiveClip(null);
+  const handleUndoClip = useCallback(() => {
+    setClips(prev => prev.slice(0, -1));
   }, []);
 
   const handleOpenGallery = useCallback(async () => {
-    // Step 1: ask for media library permission if needed
     let permission = await ImagePicker.getMediaLibraryPermissionsAsync();
-    if (permission.status !== "granted") {
-      permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    }
+    if (permission.status !== 'granted') permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permission.status !== 'granted') return;
 
-    if (permission.status !== "granted") {
-      // Permission denied: just return silently (UI remains on camera)
-      console.warn("Media library permission not granted");
-      return;
-    }
-
-    // Step 2: open gallery picker
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
-      allowsMultipleSelection: false,
-      quality: 1,
-    });
-
-    if (result.canceled || !result.assets || result.assets.length === 0) {
-      // User cancelled: nothing to do
-      return;
-    }
-
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.All, allowsMultipleSelection: false, quality: 1 });
+    if (result.canceled || !result.assets || result.assets.length === 0) return;
+    
     const asset = result.assets[0];
-    if (!asset.uri) {
-      return;
+    if (!asset.uri) return;
+    const isVideo = asset.type === 'video';
+    setClips(prev => [...prev, {
+      id: `clip-${Date.now().toString(36)}`, uri: asset.uri, duration: isVideo ? asset.duration ?? 0 : 0,
+      type: isVideo ? 'video' : 'photo', source: 'gallery', speed: isVideo ? speed : undefined, 
+    }]);
+  }, [speed]);
+
+  const handleSpeedChange = useCallback((newSpeed: number) => {
+    setSpeed(newSpeed as SpeedMultiplier);
+    if (isRecording && recordingStartTimeRef.current !== null) {
+      speedChangesRef.current.push({ time: (Date.now() - recordingStartTimeRef.current) / 1000, speed: newSpeed });
+      currentSpeedRef.current = newSpeed;
     }
-
-    const makeId = () =>
-      `clip-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-
-    const isVideo = asset.type === "video";
-    const duration = isVideo ? (asset.duration ?? 0) : 0;
-
-    const newClip: CameraClip = {
-      id: makeId(),
-      uri: asset.uri,
-      duration,
-      type: isVideo ? "video" : "photo",
-      source: "gallery",
-      speed: isVideo ? speed : undefined, // Store speed for video clips from gallery
-    };
-
-    // Step 3: append to local clips array (stay on CameraScreen)
-    setClips((prev) => [...prev, newClip]);
-  }, []);
-
-  const handleSpeedChange = useCallback(
-    (newSpeed: SpeedMultiplier) => {
-      setSpeed(newSpeed);
-
-      // Track speed change if recording
-      if (isRecording && recordingStartTimeRef.current !== null) {
-        const currentTime = (Date.now() - recordingStartTimeRef.current) / 1000; // Time since recording started
-        speedChangesRef.current.push({
-          time: currentTime,
-          speed: newSpeed,
-        });
-        currentSpeedRef.current = newSpeed;
-        console.log("Speed change tracked:", {
-          time: currentTime,
-          speed: newSpeed,
-          totalChanges: speedChangesRef.current.length,
-        });
-      } else if (isRecording) {
-        console.warn("Speed change during recording but recordingStartTimeRef is null");
-      }
-    },
-    [isRecording]
-  );
+  }, [isRecording]);
 
   const handleCapturePress = useCallback(async () => {
-    console.log("=== handleCapturePress CALLED ===");
-    console.log("Current mode:", mode);
-    console.log("Is recording:", isRecording);
-
-    // Only handle tap (not drag) - drag is handled separately
     if (mode === CameraModeEnum.Video) {
-      // Video mode: tap to start/stop
       if (isRecording) {
-        console.log("🛑 Stopping video recording...");
         await stopRecording();
       } else {
-        console.log("🎬 Starting video recording...");
-
-        // Reset speed tracking for new recording
         recordingStartTimeRef.current = Date.now();
-        speedChangesRef.current = [];
+        speedChangesRef.current = [{ time: 0, speed: speed }];
         currentSpeedRef.current = speed;
-        // Record initial speed
-        speedChangesRef.current.push({
-          time: 0,
-          speed: speed,
-        });
-        console.log("Recording started with initial speed:", speed, "at time 0");
-
-        // Pass timer duration as maxDuration (in seconds) and speed
-        console.log("Calling startRecording with duration:", timerDuration, "speed:", speed);
         await startRecording(handleAddClip, timerDuration, speed);
       }
     }
-    // Photo mode tap is handled in handleCapturePressOut
-  }, [handleAddClip, isRecording, mode, startRecording, stopRecording, timerDuration, speed]);
+  }, [handleAddClip, isRecording, mode, startRecording, stopRecording, timerDuration, speed, resolution, frameRate, colorMode]);
 
   const handleNextPress = useCallback(() => {
-    if (clips.length === 0) {
-      return;
-    }
-    onNext(clips);
+    if (clips.length > 0) onNext(clips);
   }, [clips, onNext]);
 
-  // Recording timer effect
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
-
     if (isRecording) {
-      // Use recordingStartTimeRef if available, otherwise set it now
       if (recordingStartTimeRef.current === null) {
         recordingStartTimeRef.current = Date.now();
-        speedChangesRef.current = [
-          {
-            time: 0,
-            speed: currentSpeedRef.current,
-          },
-        ];
+        speedChangesRef.current = [{ time: 0, speed: currentSpeedRef.current }];
       }
-
       const start = recordingStartTimeRef.current;
       interval = setInterval(() => {
-        const elapsedMs = Date.now() - start;
-        setRecordingSeconds(Math.floor(elapsedMs / 1000));
+        setRecordingSeconds(Math.floor((Date.now() - start) / 1000));
       }, 500);
     } else {
       setRecordingSeconds(0);
     }
-
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
+    return () => { if (interval) clearInterval(interval); };
   }, [isRecording]);
 
   const formatTimer = (seconds: number): string => {
     const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
+  // 🔥 YAHAN FIX KIYA HAI INFINITE LOADER KO!
   if (hasPermission === null) {
     return (
-      <SafeAreaView style={cameraStyles.permissionContainer}>
-        <ActivityIndicator color="#ffffff" />
-        <Text style={cameraStyles.permissionText}>Checking camera permissions…</Text>
+      <SafeAreaView style={[styles.masterContainer, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator color="#ffffff" size="large" />
       </SafeAreaView>
     );
   }
 
   if (!hasPermission) {
     return (
-      <SafeAreaView style={cameraStyles.permissionContainer}>
-        <Text style={cameraStyles.permissionText}>
-          We need access to your camera and microphone to capture photos and videos.
+      <SafeAreaView style={[styles.masterContainer, { justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
+        <Text style={{ color: '#FFF', fontSize: 16, textAlign: 'center', marginBottom: 20 }}>
+          Reels banane ke liye Camera aur Microphone ki permission allow karein.
         </Text>
         <TouchableOpacity
-          style={cameraStyles.permissionButton}
+          style={{ backgroundColor: '#3b82f6', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 }}
           onPress={requestPermissions}
           disabled={isRequesting}
         >
-          <Text style={cameraStyles.permissionButtonText}>
-            {isRequesting ? "Requesting…" : "Grant permission"}
+          <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: 'bold' }}>
+            {isRequesting ? 'Requesting...' : 'Grant Permissions'}
           </Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -415,123 +230,198 @@ const CameraScreen: React.FC<CameraScreenProps> = ({ onBack, onNext, initialClip
   }
 
   return (
-    <SafeAreaView style={cameraStyles.cameraContainer}>
-      <View style={cameraStyles.cameraPreview}>
-        <CameraView
-          ref={cameraRef}
-          style={cameraStyles.cameraPreview}
-          facing={cameraFacing}
-          flash={flash === FlashModeEnum.On ? "on" : "off"}
-          enableTorch={flash === FlashModeEnum.On}
-          // Switch camera mode so the native layer is configured for the current capture type.
-          mode={mode === CameraModeEnum.Video ? "video" : "picture"}
-          zoom={normalizedZoom}
-        />
+    <SafeAreaView style={styles.masterContainer}>
+      <CameraView
+        ref={cameraRef}
+        style={StyleSheet.absoluteFillObject}
+        facing={cameraFacing}
+        flash={flash === FlashModeEnum.On ? 'on' : 'off'}
+        enableTorch={flash === FlashModeEnum.On}
+        mode={mode === CameraModeEnum.Video ? 'video' : 'picture'}
+        zoom={normalizedZoom}
+        videoQuality={resolution === '4k' ? '2160p' : '1080p'}
+      />
 
-        {/* Grid overlay (3x3 rule of thirds grid) */}
-        {gridEnabled && (
-          <View style={cameraStyles.gridOverlay} pointerEvents="none">
-            {/* Vertical lines */}
-            <View style={[cameraStyles.gridLineVertical, { left: "33.33%" }]} />
-            <View style={[cameraStyles.gridLineVertical, { left: "66.66%" }]} />
-            {/* Horizontal lines */}
-            <View style={[cameraStyles.gridLineHorizontal, { top: "33.33%" }]} />
-            <View style={[cameraStyles.gridLineHorizontal, { top: "66.66%" }]} />
-          </View>
-        )}
+      {!isRecording && (
+        <>
+          <View style={styles.floatingTopBar}>
+            <TouchableOpacity style={styles.iconButton} onPress={onBack}>
+              <Text style={styles.closeIcon}>✕</Text>
+            </TouchableOpacity>
 
-        {isRecording && (
-          <View style={cameraStyles.recordingTimerContainer}>
-            <View style={cameraStyles.recordingDot} />
-            <Text style={cameraStyles.recordingTimerText}>{formatTimer(recordingSeconds)}</Text>
-          </View>
-        )}
+            {!hasClips && (
+              <TouchableOpacity style={styles.audioPill} onPress={() => setIsMusicSheetVisible(true)}>
+                <Text style={styles.audioPillText}>🎵 Add audio</Text>
+              </TouchableOpacity>
+            )}
 
-        <View style={cameraStyles.topBar}>
-          <TouchableOpacity style={cameraStyles.backButton} onPress={onBack}>
-            <BackArrow />
-          </TouchableOpacity>
+            {hasClips && (
+              <View style={styles.timerPillStatic}>
+                <Text style={styles.timerPillStaticText}>{formatTimer(currentTotalDuration)}</Text>
+              </View>
+            )}
 
-          <View style={cameraStyles.modeToggleContainer}>
-            <ModeToggle mode={mode} onChangeMode={handleChangeMode} />
-          </View>
-        </View>
-
-        {/* Flash toggle vertically centered on the left side */}
-        <View style={cameraStyles.flashOverlay}>
-          <FlashToggle flash={flash} onToggle={handleToggleFlash} />
-        </View>
-
-        {/* Timer selector - always visible, disabled in photo mode */}
-        <View style={cameraStyles.timerSelectorOverlay}>
-          <TimerSelector
-            duration={timerDuration}
-            onDurationChange={setTimerDuration}
-            disabled={mode === CameraModeEnum.Photo}
-          />
-        </View>
-
-        {/* Speed selector - always visible, disabled in photo mode */}
-        <View style={cameraStyles.speedSelectorOverlay}>
-          <SpeedSelector
-            speed={speed}
-            onSpeedChange={handleSpeedChange}
-            disabled={mode === CameraModeEnum.Photo}
-          />
-        </View>
-
-        {/* HD selector - always visible and enabled */}
-        <View style={cameraStyles.hdSelectorOverlay}>
-          <HDSelector
-            resolution={resolution}
-            frameRate={frameRate}
-            colorMode={colorMode}
-            onResolutionChange={setResolution}
-            onFrameRateChange={setFrameRate}
-            onColorModeChange={setColorMode}
-            cameraFacing={cameraFacing}
-          />
-        </View>
-      </View>
-
-      {/* Controls row + clip list below capture */}
-      <View style={cameraStyles.bottomBar}>
-        <View style={cameraStyles.bottomControlsRow}>
-          <View style={{ flex: 1, alignItems: "flex-start" }}>
-            <GalleryButton onPress={handleOpenGallery} />
-          </View>
-          <View style={{ flex: 1, alignItems: "center" }}>
-            {/* Zoom slider just before capture button */}
-            <ZoomSlider zoom={zoom} onZoomChange={handleZoomChange} />
-            <CaptureButton
-              mode={mode}
-              isRecording={isRecording}
-              onPress={handleCapturePress}
-              onPressIn={handleCapturePressIn}
-              onPressOut={handleCapturePressOut}
-              disabled={!hasPermission}
-            />
-          </View>
-          <View style={{ flex: 1, alignItems: "flex-end" }}>
-            <CameraSwitchButton onPress={handleSwitchCamera} />
-            {clips.length > 0 && (
-              <TouchableOpacity
-                style={cameraStyles.nextButton}
-                onPress={handleNextPress}
-                activeOpacity={0.8}
-              >
-                <Text style={cameraStyles.nextButtonText}>Next</Text>
+            {!hasClips && (
+              <TouchableOpacity style={styles.iconButton}>
+                <Text style={styles.settingsIcon}>⚙️</Text>
               </TouchableOpacity>
             )}
           </View>
+
+          <View style={styles.floatingSidebar}>
+            <TouchableOpacity style={styles.sidebarItemRow} onPress={() => setIsMusicSheetVisible(true)}>
+              <Text style={styles.sidebarIcon}>🎵</Text>
+              {hasClips && <Text style={styles.sidebarLabel}>Audio</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.sidebarItemRow}>
+              <Text style={styles.sidebarIcon}>✨</Text>
+              {hasClips && <Text style={styles.sidebarLabel}>Effects</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.sidebarItemRow}>
+              <Text style={styles.sidebarIcon}>👤</Text>
+              {hasClips && <Text style={styles.sidebarLabel}>Green Screen</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.sidebarItemRow}>
+              <Text style={styles.sidebarIcon}>🪄</Text>
+              {hasClips && (
+                <View style={styles.labelWithBadge}>
+                  <Text style={styles.sidebarLabel}>Touch Up</Text>
+                  <View style={styles.badge}><Text style={styles.badgeText}>NEW</Text></View>
+                </View>
+              )}
+            </TouchableOpacity>
+            
+            <View style={styles.sidebarItemRow}>
+              <SpeedSelector speed={speed} onSpeedChange={handleSpeedChange} disabled={mode === CameraModeEnum.Photo} />
+              {hasClips && <Text style={styles.sidebarLabelShifted}>Speed</Text>}
+            </View>
+            <View style={styles.sidebarItemRow}>
+              <TimerSelector duration={timerDuration} onDurationChange={setTimerDuration} disabled={mode === CameraModeEnum.Photo} />
+              {hasClips && <Text style={styles.sidebarLabelShifted}>Timer</Text>}
+            </View>
+            <TouchableOpacity style={styles.sidebarItemRow} onPress={handleToggleGrid}>
+              <Text style={styles.sidebarIcon}>🔲</Text>
+              {hasClips && <Text style={styles.sidebarLabel}>Align</Text>}
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
+
+      {isRecording && (
+        <View style={styles.recordingTimerPill}>
+          <Text style={styles.recordingTimerText}>{formatTimer(currentTotalDuration)}</Text>
+        </View>
+      )}
+
+      {gridEnabled && (
+        <View style={cameraStyles.gridOverlay} pointerEvents="none">
+          <View style={[cameraStyles.gridLineVertical, { left: '33.33%' }]} />
+          <View style={[cameraStyles.gridLineVertical, { left: '66.66%' }]} />
+          <View style={[cameraStyles.gridLineHorizontal, { top: '33.33%' }]} />
+          <View style={[cameraStyles.gridLineHorizontal, { top: '66.66%' }]} />
+        </View>
+      )}
+
+      <View style={styles.bottomArea}>
+        <View style={styles.captureRow}>
+          {hasClips && !isRecording ? (
+            <>
+              <View style={styles.sideControlCenter}>
+                <TouchableOpacity style={styles.undoButton} onPress={handleUndoClip}>
+                  <Text style={styles.undoText}>Undo</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.centerControl}>
+                <CaptureButton mode={mode} isRecording={isRecording} hasClips={hasClips} progress={progress} onPress={handleCapturePress} onPressIn={handleCapturePressIn} onPressOut={handleCapturePressOut} disabled={!hasPermission} />
+              </View>
+              <View style={styles.sideControlCenter}>
+                <TouchableOpacity style={styles.nextButtonProminent} onPress={handleNextPress}>
+                  <Text style={styles.nextButtonTextProminent}>Next ⟩</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={styles.sideControl}>
+                {!isRecording && <GalleryButton onPress={handleOpenGallery} />}
+              </View>
+              <View style={styles.centerControl}>
+                <CaptureButton mode={mode} isRecording={isRecording} hasClips={hasClips} progress={progress} onPress={handleCapturePress} onPressIn={handleCapturePressIn} onPressOut={handleCapturePressOut} disabled={!hasPermission} />
+              </View>
+              <View style={styles.sideControlRight}>
+                <View style={isRecording ? styles.recordingFlipButton : {}}>
+                  <CameraSwitchButton onPress={handleSwitchCamera} />
+                </View>
+              </View>
+            </>
+          )}
         </View>
 
-        <ClipList clips={clips} onDeleteClip={handleDeleteClip} onPressClip={handleOpenClip} />
+        {!isRecording && !hasClips && (
+          <View style={styles.modeSelectorContainer} >
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeSelectorScroll}>
+              {/* {(['POST', 'STORY', 'REEL', 'LIVE'] as UIMode[]).map((m) => ( */}
+                {(['REEL', 'LIVE'] as UIMode[]).map((m) => (
+                <TouchableOpacity key={m} onPress={() => setUiMode(m)} style={styles.modePill}>
+                  <Text style={[styles.modeText, uiMode === m && styles.modeTextActive]}>{m}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {hasClips && !isRecording && (
+          <View style={styles.cornerControlsRow}>
+            <GalleryButton onPress={handleOpenGallery} />
+            <CameraSwitchButton onPress={handleSwitchCamera} />
+          </View>
+        )}
       </View>
 
-      {activeClip && <ClipPlayerOverlay clip={activeClip} onClose={handleCloseClip} />}
+      {activeClip && <ClipPlayerOverlay clip={activeClip} onClose={() => setActiveClip(null)} />}
+
+      <MusicLibraryModal visible={isMusicSheetVisible} onCancel={() => setIsMusicSheetVisible(false)} selectedMusic={null} onSelect={() => setIsMusicSheetVisible(false)} />
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  masterContainer: { flex: 1, backgroundColor: '#000' },
+  floatingTopBar: { position: 'absolute', top: 50, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, zIndex: 10 },
+  iconButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  closeIcon: { color: '#FFF', fontSize: 28, fontWeight: '300', textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  settingsIcon: { fontSize: 24, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  audioPill: { backgroundColor: 'rgba(0, 0, 0, 0.4)', paddingVertical: 6, paddingHorizontal: 16, borderRadius: 20 },
+  audioPillText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
+  timerPillStatic: { backgroundColor: 'rgba(255, 255, 255, 0.3)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
+  timerPillStaticText: { color: '#FFF', fontSize: 13, fontWeight: 'bold' },
+  recordingTimerPill: { position: 'absolute', top: 60, right: 20, backgroundColor: '#FF007F', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16, zIndex: 10 },
+  recordingTimerText: { color: '#FFF', fontSize: 15, fontWeight: 'bold' },
+  floatingSidebar: { position: 'absolute', left: 20, top: 120, alignItems: 'flex-start', gap: 16, zIndex: 10 },
+  sidebarItemRow: { flexDirection: 'row', alignItems: 'center', height: 40 },
+  sidebarIcon: { fontSize: 22, color: '#FFF', width: 40, textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  sidebarLabel: { color: '#FFF', fontSize: 13, fontWeight: '600', marginLeft: 8, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  sidebarLabelShifted: { color: '#FFF', fontSize: 13, fontWeight: '600', marginLeft: -2, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  labelWithBadge: { alignItems: 'flex-start' },
+  badge: { backgroundColor: '#0095f6', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4, marginLeft: 8, marginTop: 2 },
+  badgeText: { color: '#FFF', fontSize: 8, fontWeight: 'bold' },
+  bottomArea: { position: 'absolute', bottom: 30, left: 0, right: 0, alignItems: 'center', zIndex: 10 },
+  captureRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', paddingHorizontal: 30, marginBottom: 30 },
+  sideControl: { flex: 1, alignItems: 'flex-start' },
+  sideControlCenter: { flex: 1, alignItems: 'center' },
+  centerControl: { flex: 1, alignItems: 'center' },
+  sideControlRight: { flex: 1, alignItems: 'flex-end', gap: 15 },
+  recordingFlipButton: { position: 'absolute', bottom: -40, right: 0 },
+  undoButton: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 24 },
+  undoText: { color: '#FFF', fontWeight: '600', fontSize: 15 },
+  nextButtonProminent: { backgroundColor: '#FFF', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24 },
+  nextButtonTextProminent: { color: '#000', fontWeight: 'bold', fontSize: 15 },
+  modeSelectorContainer: { height: 40, width: '100%', },
+  modeSelectorScroll: { paddingHorizontal: 50, alignItems: 'center', gap: 24 },
+  modePill: { paddingHorizontal: 10 },
+  modeText: { color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: '600', letterSpacing: 1 },
+  modeTextActive: { color: '#FFF' },
+  cornerControlsRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', paddingHorizontal: 30, position: 'absolute', bottom: -10 }
+});
 
 export default CameraScreen;

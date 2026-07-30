@@ -729,7 +729,7 @@ export const ReelViewer: React.FC<ReelViewerProps> = ({
               }}
             >
               <CoinIcon size={16} color="#fff" />
-              <Text style={styles.tipButtonText}>Tip</Text>
+              <Text style={styles.tipButtonText}>Support</Text>
             </TouchableOpacity>
             
             <View style={styles.actionIconsGroup}>

@@ -12,6 +12,9 @@ interface DraggableTextOverlaysProps {
   currentTime?: number;
   onOverlayUpdate: (overlay: TextOverlay) => void;
   onOverlayPress: (overlay: TextOverlay) => void;
+  onOverlayDone?: (overlayId: string) => void;
+  onOverlayEdit?: (overlay: TextOverlay) => void;
+  onOverlayDelete?: (overlayId: string) => void;
   selectedOverlayId?: string | null;
 }
 
@@ -25,6 +28,9 @@ const DraggableTextOverlays: React.FC<DraggableTextOverlaysProps> = ({
   currentTime = 0,
   onOverlayUpdate,
   onOverlayPress,
+  onOverlayDone,
+  onOverlayEdit,
+  onOverlayDelete,
   selectedOverlayId,
 }) => {
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -34,49 +40,12 @@ const DraggableTextOverlays: React.FC<DraggableTextOverlaysProps> = ({
 
   // Check if text should be visible (for video timing)
   const getVisibleOverlays = useCallback(() => {
-    console.log("=== Checking visible overlays ===");
-    console.log("Total overlays:", overlays.length);
-    console.log("Current time:", currentTime);
-
-    return overlays.filter((overlay) => {
-      console.log(`Overlay ${overlay.id}:`, {
-        startTime: overlay.startTime,
-        endTime: overlay.endTime,
-        text: overlay.text,
-      });
-
-      // If no timing is set, show overlay always (for photos and default video behavior)
-      if (overlay.startTime === undefined && overlay.endTime === undefined) {
-        console.log(`Overlay ${overlay.id}: Always visible (no timing)`);
-        return true;
-      }
-
-      // If only startTime is set, show from that time onwards
-      if (overlay.startTime !== undefined && overlay.endTime === undefined) {
-        const visible = currentTime >= overlay.startTime;
-        console.log(`Overlay ${overlay.id}: Visible from ${overlay.startTime}:`, visible);
-        return visible;
-      }
-
-      // If only endTime is set, show until that time
-      if (overlay.startTime === undefined && overlay.endTime !== undefined) {
-        const visible = currentTime <= overlay.endTime;
-        console.log(`Overlay ${overlay.id}: Visible until ${overlay.endTime}:`, visible);
-        return visible;
-      }
-
-      // If both times are set, show within the range
-      if (overlay.startTime !== undefined && overlay.endTime !== undefined) {
-        const visible = currentTime >= overlay.startTime && currentTime <= overlay.endTime;
-        console.log(
-          `Overlay ${overlay.id}: Visible ${overlay.startTime}-${overlay.endTime}:`,
-          visible
-        );
-        return visible;
-      }
-
-      return true; // Default to visible
-    });
+    return overlays.filter(
+      (overlay) =>
+        overlay.startTime === undefined ||
+        overlay.endTime === undefined ||
+        (currentTime >= overlay.startTime && currentTime <= overlay.endTime)
+    );
   }, [overlays, currentTime]);
 
   const visibleOverlays = getVisibleOverlays();
@@ -191,6 +160,9 @@ const DraggableTextOverlays: React.FC<DraggableTextOverlaysProps> = ({
                   onOverlayPress(overlay);
                 }
               }}
+              onDone={() => onOverlayDone?.(overlay.id)}
+              onEdit={() => onOverlayEdit?.(overlay)}
+              onDelete={() => onOverlayDelete?.(overlay.id)}
             />
           </View>
         );

@@ -1,17 +1,13 @@
-import { useCallback, useRef, useState, type MutableRefObject } from "react";
-import type { CameraRecordingOptions } from "expo-camera";
-import type { CameraClip } from "../types/camera.types";
-import { CameraModeEnum } from "../utils/mediaTypes";
+import { useCallback, useRef, useState, type MutableRefObject } from 'react';
+import type { CameraRecordingOptions } from 'expo-camera';
+import type { CameraClip } from '../types/camera.types';
+import { CameraModeEnum } from '../utils/mediaTypes';
 
 export interface UseCameraResult {
   cameraRef: MutableRefObject<any>;
   isRecording: boolean;
   takePhoto: () => Promise<CameraClip | null>;
-  startRecording: (
-    onFinished: (clip: CameraClip | null) => void | Promise<void>,
-    maxDurationSeconds?: number,
-    speed?: number
-  ) => Promise<void>;
+  startRecording: (onFinished: (clip: CameraClip | null) => void | Promise<void>, maxDurationSeconds?: number, speed?: number) => Promise<void>;
   stopRecording: () => Promise<void>;
 }
 
@@ -34,7 +30,7 @@ export const useCamera = (mode: CameraModeEnum, _flash: unknown): UseCameraResul
 
     try {
       const photo = await cameraRef.current.takePictureAsync();
-      const uri = (photo as { uri?: string }).uri ?? "";
+      const uri = (photo as { uri?: string }).uri ?? '';
       if (!uri) {
         return null;
       }
@@ -43,48 +39,25 @@ export const useCamera = (mode: CameraModeEnum, _flash: unknown): UseCameraResul
         id: makeId(),
         uri,
         duration: 0,
-        type: "photo",
-        source: "camera",
+        type: 'photo',
+        source: 'camera',
       };
     } catch (error) {
       // eslint-disable-next-line no-console
-      console.warn("Failed to take photo", error);
+      console.warn('Failed to take photo', error);
       return null;
     }
   }, [mode]);
 
   const startRecording = useCallback(
-    async (
-      onFinished: (clip: CameraClip | null) => void | Promise<void>,
-      maxDurationSeconds?: number,
-      speed?: number
-    ): Promise<void> => {
-      console.log("=== startRecording CALLED ===");
-      console.log("Camera ref exists:", !!cameraRef.current);
-      console.log("Mode:", mode);
-      console.log("Is already recording:", isRecording);
-      console.log("Max duration:", maxDurationSeconds);
-      console.log("Speed:", speed);
-
-      if (!cameraRef.current) {
-        console.error("❌ Camera ref is null - cannot start recording");
-        return;
-      }
-
-      if (mode !== CameraModeEnum.Video) {
-        console.error("❌ Not in video mode - current mode:", mode);
-        return;
-      }
-
-      if (isRecording) {
-        console.error("❌ Already recording - cannot start new recording");
+    async (onFinished: (clip: CameraClip | null) => void | Promise<void>, maxDurationSeconds?: number, speed?: number): Promise<void> => {
+      if (!cameraRef.current || mode !== CameraModeEnum.Video || isRecording) {
         return;
       }
 
       const makeId = () =>
         `clip-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-      console.log("✅ Starting video recording...");
       setIsRecording(true);
       isRecordingRef.current = true;
 
@@ -96,22 +69,17 @@ export const useCamera = (mode: CameraModeEnum, _flash: unknown): UseCameraResul
 
       try {
         const options: CameraRecordingOptions = {};
-        console.log("Recording options:", options);
-
-        console.log("Calling cameraRef.current.recordAsync...");
         const recordingPromise = cameraRef.current.recordAsync(options);
 
         // Set up auto-stop timer if maxDuration is provided
         if (maxDurationSeconds && maxDurationSeconds > 0) {
-          console.log("Setting up auto-stop timer for", maxDurationSeconds, "seconds");
           maxDurationTimerRef.current = setTimeout(async () => {
-            console.log("Auto-stop timer triggered");
             if (cameraRef.current && isRecordingRef.current) {
               try {
-                console.log("Auto-stopping recording...");
                 await cameraRef.current.stopRecording();
               } catch (error) {
-                console.error("Failed to auto-stop recording", error);
+                // eslint-disable-next-line no-console
+                console.warn('Failed to auto-stop recording', error);
               }
             }
           }, maxDurationSeconds * 1000);
@@ -119,9 +87,6 @@ export const useCamera = (mode: CameraModeEnum, _flash: unknown): UseCameraResul
 
         recordingPromise
           .then((video: any) => {
-            console.log("✅ Recording completed successfully");
-            console.log("Video result:", video);
-
             // Clear timer if recording finishes before timeout
             if (maxDurationTimerRef.current) {
               clearTimeout(maxDurationTimerRef.current);
@@ -129,74 +94,57 @@ export const useCamera = (mode: CameraModeEnum, _flash: unknown): UseCameraResul
             }
             setIsRecording(false);
             isRecordingRef.current = false;
-            const uri = (video as { uri?: string }).uri ?? "";
+            const uri = (video as { uri?: string }).uri ?? '';
             const duration = (video as { duration?: number }).duration ?? 0;
 
-            console.log("Video URI:", uri);
-            console.log("Video duration:", duration);
-
             if (!uri) {
-              console.error("❌ No URI in video result");
               void onFinished(null);
             } else {
-              const clip = {
+              void onFinished({
                 id: makeId(),
                 uri,
                 duration,
-                type: "video" as const,
-                source: "camera" as const,
+                type: 'video',
+                source: 'camera',
                 speed: speed ?? 1, // Store speed multiplier with clip
-              };
-              console.log("✅ Created video clip:", clip);
-              void onFinished(clip);
+              });
             }
           })
           .catch((error: any) => {
-            console.error("❌ Recording error:", error);
-
             // Clear timer on error
             if (maxDurationTimerRef.current) {
               clearTimeout(maxDurationTimerRef.current);
               maxDurationTimerRef.current = null;
             }
+            // eslint-disable-next-line no-console
+            console.error('Recording error', error);
             setIsRecording(false);
             isRecordingRef.current = false;
             void onFinished(null);
           });
       } catch (error) {
-        console.error("❌ Failed to start recording:", error);
-
         // Clear timer on error
         if (maxDurationTimerRef.current) {
           clearTimeout(maxDurationTimerRef.current);
           maxDurationTimerRef.current = null;
         }
+        // eslint-disable-next-line no-console
+        console.error('Failed to start recording', error);
         setIsRecording(false);
         isRecordingRef.current = false;
         void onFinished(null);
       }
     },
-    [isRecording, mode]
+    [isRecording, mode],
   );
 
   const stopRecording = useCallback(async (): Promise<void> => {
-    console.log("=== stopRecording CALLED ===");
-    console.log("Camera ref exists:", !!cameraRef.current);
-    console.log("Is recording:", isRecording);
-
-    if (!cameraRef.current) {
-      console.error("❌ Camera ref is null - cannot stop recording");
-      return;
-    }
-
-    if (!isRecording) {
-      console.error("❌ Not currently recording - cannot stop");
+    if (!cameraRef.current || !isRecording) {
       return;
     }
 
     // Clear auto-stop timer
     if (maxDurationTimerRef.current) {
-      console.log("Clearing auto-stop timer");
       clearTimeout(maxDurationTimerRef.current);
       maxDurationTimerRef.current = null;
     }
@@ -204,11 +152,10 @@ export const useCamera = (mode: CameraModeEnum, _flash: unknown): UseCameraResul
     isRecordingRef.current = false;
 
     try {
-      console.log("✅ Stopping recording...");
       await cameraRef.current.stopRecording();
-      console.log("✅ Recording stopped successfully");
     } catch (error) {
-      console.error("❌ Failed to stop recording:", error);
+      // eslint-disable-next-line no-console
+      console.warn('Failed to stop recording', error);
     }
   }, [isRecording]);
 
@@ -220,3 +167,4 @@ export const useCamera = (mode: CameraModeEnum, _flash: unknown): UseCameraResul
     stopRecording,
   };
 };
+

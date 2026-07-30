@@ -55,7 +55,7 @@ import { convertDateToDaysLeft } from "@/utils/convertDateToDaysLeft";
 
 const getDimensions = () => Dimensions.get("window");
 
-function GullyFameHome() {
+export default function GullyFameHome() {
   const [activeTab, setActiveTab] = useState("Home");
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [dimensions, setDimensions] = useState(getDimensions());
@@ -77,7 +77,7 @@ function GullyFameHome() {
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const liveDotBlink = useRef(new Animated.Value(1)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current; // New Heartbeat animation
+  const pulseAnim = useRef(new Animated.Value(1)).current;
   const [scrollY, setScrollY] = useState(0);
 
   useEffect(() => {
@@ -96,7 +96,8 @@ function GullyFameHome() {
         if (data.topCompetitors) setTopCompetitors(data.topCompetitors);
       } catch (err) {
         setBanners(heroSlides);
-        console.error(`Error: ${err}`);
+        // ✅ FIX: Separating the object exposes its true structure in console logs
+        console.error("Error fetching home page data:", err);
       }
     }
     fetchHomePage();
@@ -107,13 +108,15 @@ function GullyFameHome() {
     () =>
       liveCompetitions.map((comp) => ({
         defaultThumbnailImage: require("@assets/images/trending_reel2.png"),
-        people: convertToFormattedString(comp.participants),
-        endDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+        // ✅ FIX: Coerce input to safe number types
+        people: convertToFormattedString(Number(comp.participants ?? 0)),
+        endDate: comp.endDate ? String(comp.endDate) : new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
         prize: convertToFormattedPrize(comp.prize),
         ...comp,
       })),
     [liveCompetitions]
   );
+  
   const pastCompetitionsFull = useMemo(
     () =>
       pastCompetitions.map((comp) => ({
@@ -122,6 +125,7 @@ function GullyFameHome() {
       })),
     [pastCompetitions]
   );
+  
   const upcomingCompetitionsFull = useMemo(
     () =>
       upcomingCompetitions.map((comp) => ({
@@ -137,12 +141,8 @@ function GullyFameHome() {
       username: reel.title || "GullyFame Creator",
       caption: reel.category || "",
       musicName: "Original Sound",
-      // ✅ KIRO: Edit by kiro - Removed video file reference (file deleted to reduce build size)
-      // ❌ OLD CODE - VIDEO FILE REFERENCE (file deleted)
-      // video: require("@assets/1.mp4"),
-      // ✅ NEW CODE - PLACEHOLDER (will use backend video URL)
       video: null,
-      likes: reel.likes || 0,
+      likes: Number(reel.likes ?? 0),
       comments: 0,
       shares: 0,
       saves: 0,
@@ -180,7 +180,6 @@ function GullyFameHome() {
       ])
     );
 
-    // Heartbeat pulse for high-priority CTA buttons
     const heartbeatAnimation = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
@@ -192,7 +191,7 @@ function GullyFameHome() {
           toValue: 1,
           duration: 600,
           useNativeDriver: true,
-        }),
+         }),
       ])
     );
 
@@ -204,7 +203,6 @@ function GullyFameHome() {
     };
   }, []);
 
-  
   const tabs = [
     { name: "Home", icon: HomeIconSVG, label: "" },
     { name: "Reel", icon: ReelIconSVG, label: "GullyReel" },
@@ -236,10 +234,9 @@ function GullyFameHome() {
     }
   };
 
-  // Section Architecture
   const homeSections = [
     { id: "hero" },
-    { id: "user_progress" }, // <-- New Gamification Hub
+    { id: "user_progress" },
     { id: "categories" },
     { id: "trending" },
     { id: "live" },
@@ -388,12 +385,14 @@ function GullyFameHome() {
                   <View style={styles.trendingReelStatsBelow}>
                     <View style={styles.statItem}>
                       <ThumbsUpIcon />
-                      <Text style={styles.statText}>{convertToFormattedString(reel.likes)}</Text>
+                      {/* ✅ FIX: Number Type coercion wrapper */}
+                      <Text style={styles.statText}>{convertToFormattedString(Number(reel.likes ?? 0))}</Text>
                     </View>
                     <View style={styles.statItem}>
                       <EyeIcon color="#EAB04B" />
+                      {/* ✅ FIX: Number Type coercion wrapper */}
                       <Text style={styles.statText}>
-                        {convertToFormattedString(reel.views)} views
+                        {convertToFormattedString(Number(reel.views ?? 0))} views
                       </Text>
                     </View>
                   </View>
@@ -483,7 +482,6 @@ function GullyFameHome() {
                         </Text>
                       </View>
 
-                      {/* Gamified Pulse Animation applied here */}
                       <Animated.View
                         style={[
                           styles.joinButtonOverlay,
@@ -524,14 +522,15 @@ function GullyFameHome() {
                       <View style={styles.compInfoRow}>
                         <View style={styles.compInfoItem}>
                           <LimitedTimeEventClockIcon />
+                          {/* ✅ FIX: Date String type safety guard */}
                           <Text style={styles.upcomingCompDeadline}>
-                            {convertDateToDaysLeft(comp.endDate)} Days Left
+                            {convertDateToDaysLeft(comp.endDate ? String(comp.endDate) : "")} Days Left
                           </Text>
                         </View>
                         <View style={styles.compInfoItem}>
                           <PeopleIcon color="#EC9A15" size={14} />
                           <Text style={styles.upcomingCompParticipants}>
-                            {convertToFormattedString(comp.participants)}
+                            {comp.people}
                           </Text>
                         </View>
                       </View>
@@ -609,14 +608,15 @@ function GullyFameHome() {
                       <View style={styles.compInfoRow}>
                         <View style={styles.compInfoItem}>
                           <LimitedTimeEventClockIcon></LimitedTimeEventClockIcon>
+                          {/* ✅ FIX: Date String type safety guard */}
                           <Text style={styles.upcomingCompDeadline}>
-                            {convertDateToDaysLeft(comp.endDate)} Days Left
+                            {convertDateToDaysLeft(comp.endDate ? String(comp.endDate) : "")} Days Left
                           </Text>
                         </View>
                         <View style={styles.compInfoItem}>
                           <PeopleIcon color="#EC9A15" size={14} />
                           <Text style={styles.upcomingCompParticipants}>
-                            {convertToFormattedString(comp.participants)}
+                            {convertToFormattedString(Number(comp.participants ?? 0))}
                           </Text>
                         </View>
                       </View>
@@ -699,8 +699,9 @@ function GullyFameHome() {
                       </View>
                       <View style={styles.viewsRow}>
                         <ViewsEyeIcon size={15}></ViewsEyeIcon>
+                        {/* ✅ FIX: Number coercion format safety */}
                         <Text style={styles.pastCompViews}>
-                          {convertToFormattedString(comp.views)} Views
+                          {convertToFormattedString(Number(comp.views ?? 0))} Views
                         </Text>
                       </View>
                     </View>
@@ -725,7 +726,6 @@ function GullyFameHome() {
               Overall point leaders across all GullyFame events.
             </Text>
 
-            {/* Gamified Personal Rank Placement */}
             <View style={styles.personalRankBar}>
               <Text style={styles.personalRankText}>
                 You are currently Rank{" "}
@@ -775,8 +775,9 @@ function GullyFameHome() {
                   <Text style={styles.hallOfFameName} numberOfLines={1}>
                     {competitor.name}
                   </Text>
+                  {/* ✅ FIX: Coerce leader stats to safe numbers */}
                   <Text style={styles.hallOfFamePoints}>
-                    {convertToFormattedString(competitor.points)} pts
+                    {convertToFormattedString(Number(competitor.points ?? 0))} pts
                   </Text>
                 </View>
               ))}
@@ -797,7 +798,6 @@ function GullyFameHome() {
   };
 
   if (typeof BottomNav !== "function" || typeof DrawerMenu !== "function") return null;
-
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
@@ -860,4 +860,3 @@ function GullyFameHome() {
   );
 }
 
-export default GullyFameHome;

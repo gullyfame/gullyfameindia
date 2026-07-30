@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Camera } from "expo-camera";
-import { Audio } from "expo-av";
+import { useCallback } from "react";
+import { useCameraPermissions, useMicrophonePermissions } from "expo-camera";
 import type { PermissionStatus } from "../types/camera.types";
 
 export interface UsePermissionsResult {
@@ -12,76 +11,37 @@ export interface UsePermissionsResult {
 }
 
 /**
- * Hook that manages camera & microphone permissions.
- * Properly checks and requests permissions for video recording.
+ * Hook that manages camera & microphone permissions using official expo-camera React Hooks.
  */
 export const usePermissions = (): UsePermissionsResult => {
-  const [cameraPermission, setCameraPermission] = useState<PermissionStatus | null>(null);
-  const [microphonePermission, setMicrophonePermission] = useState<PermissionStatus | null>(null);
-  const [isRequesting, setIsRequesting] = useState(false);
+  // Expo Camera ke standard hooks (Ekdum sahi names ke sath)
+  const [camPermission, requestCamPermission] = useCameraPermissions();
+  const [micPermission, requestMicPermission] = useMicrophonePermissions();
+
+  // Statuses ko aapke local PermissionStatus type mein map karenge
+  const cameraPermission = camPermission ? (camPermission.status as PermissionStatus) : null;
+  const microphonePermission = micPermission ? (micPermission.status as PermissionStatus) : null;
 
   const hasPermission = cameraPermission === "granted" && microphonePermission === "granted";
 
-  const loadCurrentStatus = useCallback(async () => {
-    try {
-      console.log("=== Checking current permissions ===");
-
-      // Check camera permission
-      const cameraStatus = await Camera.getCameraPermissionsAsync();
-      console.log("Camera permission status:", cameraStatus.status);
-      setCameraPermission(cameraStatus.status);
-
-      // Check microphone permission (needed for video recording)
-      const audioStatus = await Audio.getPermissionsAsync();
-      console.log("Microphone permission status:", audioStatus.status);
-      setMicrophonePermission(audioStatus.status);
-    } catch (error) {
-      console.error("Failed to read permissions", error);
-      setCameraPermission("denied");
-      setMicrophonePermission("denied");
-    }
-  }, []);
-
+  // Request trigger karne wala main function
   const requestPermissions = useCallback(async (): Promise<boolean> => {
-    console.log("=== Requesting permissions ===");
-    setIsRequesting(true);
-
     try {
-      // Request camera permission
-      console.log("Requesting camera permission...");
-      const cameraResult = await Camera.requestCameraPermissionsAsync();
-      console.log("Camera permission result:", cameraResult.status);
-      setCameraPermission(cameraResult.status);
-
-      // Request microphone permission (essential for video recording)
-      console.log("Requesting microphone permission...");
-      const audioResult = await Audio.requestPermissionsAsync();
-      console.log("Microphone permission result:", audioResult.status);
-      setMicrophonePermission(audioResult.status);
-
-      const success = cameraResult.status === "granted" && audioResult.status === "granted";
-      console.log("All permissions granted:", success);
-
-      return success;
+      const camResult = await requestCamPermission();
+      const micResult = await requestMicPermission();
+      return camResult.granted && micResult.granted;
     } catch (error) {
-      console.error("Failed to request permissions", error);
-      setCameraPermission("denied");
-      setMicrophonePermission("denied");
+      console.warn("Failed to request camera/microphone permissions", error);
       return false;
-    } finally {
-      setIsRequesting(false);
     }
-  }, []);
-
-  useEffect(() => {
-    void loadCurrentStatus();
-  }, [loadCurrentStatus]);
+  }, [requestCamPermission, requestMicPermission]); // Dependencies ekdum cross-checked hain
 
   return {
-    hasPermission,
+    // Jab tak permissions OS se load ho rahi hain, tab tak null return hoga
+    hasPermission: camPermission && micPermission ? hasPermission : null,
     cameraPermission,
     microphonePermission,
-    isRequesting,
+    isRequesting: false,
     requestPermissions,
   };
 };

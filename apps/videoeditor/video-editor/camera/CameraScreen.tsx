@@ -1,37 +1,44 @@
-import React, { useCallback } from 'react';
+// PATH: apps/videoeditor/video-ediot/camera/CameraScreen.tsx
+
+import React, { useState, useCallback } from 'react';
 import { ActivityIndicator, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { CameraView } from 'expo-camera';
-import useCameraPermissions from './useCameraPermissions';
+import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera'; 
+import HDSelector from '@/camera-module/components/HDSelector';
 
 /**
- * CameraScreen
+ * CameraScreen (Standalone Video Editor Module)
  *
- * - Handles camera + microphone permissions safely
+ * - Handles camera + microphone permissions safely using Expo native hooks
  * - Renders a stable CameraView component from expo-camera
- * - Never evaluates to undefined (all imports are validated and default-exported)
- *
- * This screen is intentionally minimal and self-contained so it can be reused
- * from the VideoEditorModule or any future editor flows.
  */
 const CameraScreen: React.FC = () => {
-  const { hasPermission, isRequesting, requestPermissions } = useCameraPermissions();
+  // Use Expo's native hooks to prevent Android deadlocks
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [micPermission, requestMicPermission] = useMicrophonePermissions();
 
-  const handleRequest = useCallback(() => {
-    void requestPermissions();
-  }, [requestPermissions]);
+  const [config, setConfig] = useState({
+    resolution: '1080p', 
+    fps: 30,
+    hdr: false
+  });
 
-  // While we are checking permission state, show a neutral loader.
-  if (hasPermission === null) {
+  const handleRequest = useCallback(async () => {
+    await requestCameraPermission();
+    await requestMicPermission();
+  }, [requestCameraPermission, requestMicPermission]);
+
+  // If permissions state is still loading
+  if (!cameraPermission || !micPermission) {
     return (
       <SafeAreaView style={styles.centered}>
-        <ActivityIndicator color="#ffffff" />
+        <ActivityIndicator color="#ffffff" size="large" />
         <Text style={styles.message}>Checking camera permissions…</Text>
       </SafeAreaView>
     );
   }
 
-  // Permissions not granted: show explanation + button to request again.
-  if (!hasPermission) {
+  // If permissions are not granted
+  if (!cameraPermission.granted || !micPermission.granted) {
     return (
       <SafeAreaView style={styles.centered}>
         <Text style={styles.message}>
@@ -40,24 +47,40 @@ const CameraScreen: React.FC = () => {
         <TouchableOpacity
           style={styles.primaryButton}
           onPress={handleRequest}
-          disabled={isRequesting}
         >
           <Text style={styles.primaryButtonText}>
-            {isRequesting ? 'Requesting…' : 'Grant permission'}
+            Grant permission
           </Text>
         </TouchableOpacity>
       </SafeAreaView>
     );
   }
 
-  // Permissions granted: render the camera preview.
+  // Permissions granted: render the camera preview securely
   return (
     <SafeAreaView style={styles.container}>
-      <CameraView
-        style={styles.camera}
-        facing="back"
-        flash="off"
-      />
+      {/* 1. Preview Area */}
+      <View style={styles.previewArea}>
+        <CameraView
+          style={styles.camera}
+          facing="back"
+          flash="off"
+          // We map resolution string properly for Expo Camera
+          videoQuality={config.resolution === '4k' ? '2160p' : '1080p'} 
+        />
+      </View>
+
+      {/* 2. Controls Area */}
+      <View style={styles.controlsArea}>
+        <HDSelector
+          resolution={config.resolution as any}
+          frameRate={config.fps as any}
+          colorMode={config.hdr ? 'hdr' : 'sdr'}
+          onResolutionChange={(res) => setConfig(prev => ({ ...prev, resolution: res }))}
+          onFrameRateChange={(fps) => setConfig(prev => ({ ...prev, fps }))}
+          onColorModeChange={(mode) => setConfig(prev => ({ ...prev, hdr: mode === 'hdr' }))}
+        />
+      </View>
     </SafeAreaView>
   );
 };
@@ -65,7 +88,18 @@ const CameraScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    flexDirection: 'column', 
+    backgroundColor: '#000',
+  },
+  previewArea: {
+    flex: 1, 
+    width: '100%',
+    backgroundColor: '#000',
+  },
+  controlsArea: {
+    height: '30%', 
+    width: '100%',
+    backgroundColor: '#000',
   },
   camera: {
     flex: 1,
@@ -86,17 +120,15 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     paddingHorizontal: 24,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 999,
     backgroundColor: '#3b82f6',
   },
   primaryButtonText: {
     color: '#ffffff',
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: 'bold',
   },
 });
 
 export default CameraScreen;
-
-

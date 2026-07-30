@@ -1,6 +1,5 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import { Dimensions, Modal, Platform, StyleSheet, Text, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
-import { Camera } from 'expo-camera';
 import { cameraStyles } from '../styles/cameraStyles';
 
 export type Resolution = 'hd' | '2k' | '4k';
@@ -31,7 +30,6 @@ interface DeviceCapabilities {
 /**
  * HD selector component with HD icon.
  * Shows Resolution (HD, 2K, 4K), Frame Rate (24, 30, 60), and Color (SDR, HDR) options in a modal.
- * Automatically detects and disables unsupported options based on device capabilities.
  */
 const HDSelector: React.FC<HDSelectorProps> = ({
   resolution,
@@ -55,101 +53,20 @@ const HDSelector: React.FC<HDSelectorProps> = ({
     arrowTop: 0,
   });
   const [popupLayout, setPopupLayout] = useState({ width: 0, height: 0 });
+  
+  // 🔥 DIRECT FIX: Sabhi options initially hi TRUE set kar diye gaye hain
   const [capabilities, setCapabilities] = useState<DeviceCapabilities>({
     supportsHD: true,
-    supports2K: false,
-    supports4K: false,
+    supports2K: true,
+    supports4K: true,
     supports24fps: true,
     supports30fps: true,
-    supports60fps: false,
-    supportsHDR: false,
+    supports60fps: true,
+    supportsHDR: true,
   });
+
   const buttonRef = useRef<View>(null);
   const popupRef = useRef<View>(null);
-
-  // Detect device capabilities
-  useEffect(() => {
-    const detectCapabilities = async () => {
-      try {
-        const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-        const screenPixels = screenWidth * screenHeight;
-        const isIOS = Platform.OS === 'ios';
-        const isAndroid = Platform.OS === 'android';
-
-        // Get camera permissions to access device info
-        const { status } = await Camera.getCameraPermissionsAsync();
-        
-        // Use screen resolution as a proxy for device capabilities
-        // Higher resolution screens typically indicate more capable devices
-        const isHighEndDevice = screenPixels > 2000000; // ~2MP+ screen (1080p+)
-        const isMidRangeDevice = screenPixels > 1000000; // ~1MP+ screen (720p+)
-        
-        // Resolution capabilities based on device tier
-        // HD (1080p) is supported by virtually all modern devices (2014+)
-        const supportsHD = true;
-        
-        // 2K (1440p/2560x1440) - supported by mid-range and high-end devices
-        // Most phones from 2017+ support this
-        // Conservative: enable for devices with 1080p+ screens (indicating capable hardware)
-        const supports2K = isHighEndDevice || (isIOS && screenPixels > 1500000);
-        
-        // 4K (2160p/3840x2160) - typically high-end devices only
-        // iPhone 6s+ (2015+), Android flagships from 2016+
-        // Very conservative: only enable for clearly high-end devices
-        // iPhone X+ (2017+) and Android flagships with 1440p+ screens
-        const supports4K = (isIOS && screenPixels > 2000000) || (isAndroid && isHighEndDevice && screenPixels > 2000000);
-
-        // Frame rate capabilities
-        // 24fps - supported by all devices (standard cinema frame rate)
-        const supports24fps = true;
-        
-        // 30fps - standard for most devices
-        const supports30fps = true;
-        
-        // 60fps - common on modern devices (2015+)
-        // Most iOS devices since iPhone 6 support 60fps
-        // Android varies significantly - be conservative
-        // Enable for iOS (generally well supported) and high-end Android
-        const supports60fps = isIOS || (isAndroid && isHighEndDevice);
-
-        // HDR (High Dynamic Range) capabilities
-        // iOS: iPhone 7+ (2016+) support HDR video recording
-        // Android: Flagship devices from 2017+ typically support HDR
-        // Conservative approach: enable for iOS (iPhone 7+) and high-end Android
-        const supportsHDR = isIOS || (isAndroid && isHighEndDevice);
-
-        setCapabilities({
-          supportsHD,
-          supports2K,
-          supports4K,
-          supports24fps,
-          supports30fps,
-          supports60fps,
-          supportsHDR,
-        });
-
-        // Note: expo-camera doesn't provide direct format enumeration
-        // This detection uses heuristics based on screen resolution and platform
-        // For more accurate detection, you could use a native module to query
-        // actual camera capabilities, but this provides good coverage for most devices
-      } catch (error) {
-        console.warn('Error detecting camera capabilities:', error);
-        // Default to conservative capabilities (most compatible)
-        // Only enable features that are universally supported
-        setCapabilities({
-          supportsHD: true, // Universal
-          supports2K: false, // Conservative
-          supports4K: false, // Conservative
-          supports24fps: true, // Universal
-          supports30fps: true, // Universal
-          supports60fps: false, // Conservative
-          supportsHDR: false, // Conservative
-        });
-      }
-    };
-
-    detectCapabilities();
-  }, [cameraFacing]);
 
   const handleOpenModal = () => {
     if (disabled) return;
@@ -239,7 +156,7 @@ const HDSelector: React.FC<HDSelectorProps> = ({
   ];
 
   const colorOptions: { value: ColorMode; label: string; supported: boolean }[] = [
-    { value: 'sdr', label: 'SDR', supported: true }, // Always supported
+    { value: 'sdr', label: 'SDR', supported: true }, 
     { value: 'hdr', label: 'HDR', supported: capabilities.supportsHDR },
   ];
 
@@ -283,7 +200,7 @@ const HDSelector: React.FC<HDSelectorProps> = ({
             cameraStyles.hdSelectorText,
             disabled && cameraStyles.disabledIconText,
           ]}>
-            HD
+            HD+
           </Text>
         </TouchableOpacity>
       </View>
@@ -310,7 +227,6 @@ const HDSelector: React.FC<HDSelectorProps> = ({
             ]}
             pointerEvents="auto"
           >
-            {/* Arrow pointing left - aligned to button center */}
             {buttonLayout.arrowTop > 0 && (
               <View
                 style={[
@@ -322,7 +238,7 @@ const HDSelector: React.FC<HDSelectorProps> = ({
               />
             )}
 
-            {/* Resolution Section - Horizontal Row */}
+            {/* Resolution Section */}
             <View style={cameraStyles.hdModalSection}>
               <Text style={cameraStyles.hdModalSectionTitle}>Resolution</Text>
               <View style={cameraStyles.hdModalOptionsRow}>
@@ -351,7 +267,7 @@ const HDSelector: React.FC<HDSelectorProps> = ({
               </View>
             </View>
 
-            {/* Frame Rate Section - Horizontal Row */}
+            {/* Frame Rate Section */}
             <View style={cameraStyles.hdModalSection}>
               <Text style={cameraStyles.hdModalSectionTitle}>Frame Rate</Text>
               <View style={cameraStyles.hdModalOptionsRow}>
@@ -380,7 +296,7 @@ const HDSelector: React.FC<HDSelectorProps> = ({
               </View>
             </View>
 
-            {/* Color Section - Horizontal Row */}
+            {/* Color Section */}
             <View style={cameraStyles.hdModalSection}>
               <Text style={cameraStyles.hdModalSectionTitle}>Color</Text>
               <View style={cameraStyles.hdModalOptionsRow}>
@@ -416,4 +332,3 @@ const HDSelector: React.FC<HDSelectorProps> = ({
 };
 
 export default HDSelector;
-

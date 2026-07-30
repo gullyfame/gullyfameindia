@@ -24,7 +24,7 @@ export async function areAllKycStepsCompleted(): Promise<boolean> {
     const hasFaceScan = faceScanDone === "true";
 
     // All steps must be completed
-    const allCompleted = hasBio && hasImage && hasDob && hasGender && hasFaceScan;
+    const allCompleted = Boolean(hasBio && hasImage && hasDob && hasGender && hasFaceScan);
 
     if (__DEV__) {
       console.log("[kycValidation] KYC Steps Check:", {

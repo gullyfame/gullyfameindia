@@ -1,4 +1,4 @@
-// create file kiro told me
+// File Route: apps/gully-fame-mobile/screens/RegisterScreen.tsx (Or your auth/register file path)
 
 import React, { useState } from 'react';
 import {
@@ -24,6 +24,8 @@ export default function RegisterScreen({ navigation }: any) {
   const [mobile, setMobile] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  // Naya State: Referral Code save karne ke liye
+  const [referralCode, setReferralCode] = useState('');
   const [role, setRole] = useState<'participants' | 'fan'>('participants');
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{
@@ -95,9 +97,9 @@ export default function RegisterScreen({ navigation }: any) {
 
     setIsLoading(true);
     try {
-      console.log('[RegisterScreen] Attempting registration');
+      console.log('[RegisterScreen] Attempting registration with referral logic');
 
-      // Call register API
+      // Call register API - referralCode ko body me add kar diya hai
       const response = await authService.registerUser({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
@@ -105,14 +107,13 @@ export default function RegisterScreen({ navigation }: any) {
         mobile: mobile.trim(),
         password,
         role,
+        referralCode: referralCode.trim() || undefined, // Agar blank hoga to nahi jayega
       });
 
       if (response.success && response.data?.token) {
         console.log('[RegisterScreen] Registration successful');
         
-        // Save token and user data
         await login(response.data.token);
-        
         Alert.alert('Success', 'Registration successful!');
       } else {
         console.error('[RegisterScreen] Registration failed:', response.error);
@@ -120,7 +121,6 @@ export default function RegisterScreen({ navigation }: any) {
       }
     } catch (error: any) {
       console.error('[RegisterScreen] Registration error:', error);
-      
       const errorMessage = error.message || 'Registration failed. Please try again.';
       Alert.alert('Error', errorMessage);
     } finally {
@@ -261,6 +261,20 @@ export default function RegisterScreen({ navigation }: any) {
             {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
           </View>
 
+          {/* Naya UI Box: Referral Code Input (Optional) */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Referral Code <Text style={styles.optionalText}>(Optional)</Text></Text>
+            <TextInput
+              style={[styles.input, styles.referralInput]}
+              placeholder="e.g. GULLY-8X9P"
+              value={referralCode}
+              onChangeText={(text) => setReferralCode(text.toUpperCase())} // Automatic capital letters
+              editable={!isLoading}
+              placeholderTextColor="#999"
+              autoCapitalize="characters"
+            />
+          </View>
+
           {/* Role Selection */}
           <View style={styles.roleContainer}>
             <Text style={styles.label}>I am a</Text>
@@ -368,6 +382,11 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 8,
   },
+  optionalText: {
+    fontSize: 12,
+    color: '#888',
+    fontWeight: 'normal',
+  },
   input: {
     borderWidth: 1,
     borderColor: '#ddd',
@@ -376,6 +395,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     color: '#000',
+  },
+  referralInput: {
+    borderColor: '#EC9A15', // Gully Fame theme color highlight for referral bonus
+    borderStyle: 'dashed',  // Premium feel dene ke liye dashed border
+    fontWeight: '600',
+    letterSpacing: 1,
   },
   inputError: {
     borderColor: '#ff4444',

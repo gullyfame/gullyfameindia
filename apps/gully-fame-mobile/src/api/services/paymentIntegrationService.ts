@@ -41,7 +41,8 @@ export interface PaymentResponse {
   timestamp: string;
 }
 
-export interface TipPaymentRequest {
+// Renamed from TipPaymentRequest to SupportPaymentRequest
+export interface SupportPaymentRequest {
   recipientId: string;
   reelId: string;
   amount: number;
@@ -247,14 +248,14 @@ export async function verifyPayment(
 }
 
 /**
- * Send tip payment
- * KIRO: Send coins as tip to another user
+ * Send support payment
+ * KIRO: Send coins/money as support to another user (Renamed from sendTipPayment)
  */
-export async function sendTipPayment(
-  request: TipPaymentRequest
-): Promise<ApiResponse<{ tipId: string; status: string }>> {
+export async function sendSupportPayment(
+  request: SupportPaymentRequest
+): Promise<ApiResponse<{ supportId: string; status: string }>> {
   try {
-    console.log("[paymentIntegrationService] Sending tip payment");
+    console.log("[paymentIntegrationService] Sending support payment");
 
     const payload = {
       recipientId: request.recipientId,
@@ -264,6 +265,7 @@ export async function sendTipPayment(
       message: request.message || "",
     };
 
+    // Note: Kept endpoint as "payment/send-tip" to prevent backend 404 until server updates
     const response = await apiClient.post<any>("payment/send-tip", payload);
     const responseData = response.data as any;
 
@@ -271,26 +273,26 @@ export async function sendTipPayment(
       return {
         success: true,
         data: {
-          tipId: responseData.data.tipId || responseData.data.id,
+          supportId: responseData.data.supportId || responseData.data.tipId || responseData.data.id,
           status: responseData.data.status || "completed",
         },
-        message: responseData.message || "Tip sent successfully",
+        message: responseData.message || "Support sent successfully",
       };
     }
 
     return {
       success: false,
-      message: responseData.message || "Failed to send tip",
+      message: responseData.message || "Failed to send support",
       error: "API returned unsuccessful response",
-      data: { tipId: "", status: "failed" },
+      data: { supportId: "", status: "failed" },
     };
   } catch (error: any) {
-    console.error("[paymentIntegrationService] Send tip error:", error.message);
+    console.error("[paymentIntegrationService] Send support error:", error.message);
     return {
       success: false,
-      message: error.message || "Failed to send tip",
+      message: error.message || "Failed to send support",
       error: error.message,
-      data: { tipId: "", status: "error" },
+      data: { supportId: "", status: "error" },
     };
   }
 }

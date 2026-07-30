@@ -1,149 +1,62 @@
+// File Route: apps/gully-fame-mobile/app/(main)/saved.tsx
+
 import React, { useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
+  ScrollView,
   TouchableOpacity,
   StatusBar,
   Platform,
   Image,
-  FlatList,
   Dimensions,
 } from "react-native";
 import { router } from "expo-router";
-import Svg, { Path } from "react-native-svg";
-import { ReelViewer } from "@components/reel/ReelViewer";
-import { BackIcon } from "@/icons";
-const { width } = Dimensions.get("window");
+import { Ionicons } from "@expo/vector-icons";
 
-// Mock saved reels data - same format as downloads
-// ✅ KIRO: Edit by kiro - Removed all video file references (files deleted to reduce build size)
-const savedReels = [
+const { width } = Dimensions.get("window");
+const CARD_WIDTH = (width - 60) / 2; // 2 columns with padding
+
+// Dummy Data (Asli app me API se aayega)
+const savedContent = [
   {
-    id: 1,
-    username: "@Suhani0098000",
-    caption: "Good morning everyone #goodmorning",
-    musicName: "On the way - (alan walker)",
-    video: null,
-    image: require("@assets/images/trending_reel1.png"),
-    likes: 134,
-    comments: 23,
-    shares: 12,
-    saves: 45,
-    tips: 12,
-    isLiked: false,
-    isSaved: false,
-    type: "video" as const,
+    id: "1",
+    type: "reel",
+    title: "Street Dance Battle",
+    author: "@rahul_dancer",
+    thumbnail: "https://picsum.photos/seed/dance1/200/300",
   },
   {
-    id: 2,
-    username: "@DancerPro",
-    caption: "Showing off my moves! 💃 #dance",
-    musicName: "Original Sound - DancerPro",
-    video: null,
-    image: require("@assets/images/trending_reel2.png"),
-    likes: 256,
-    comments: 45,
-    shares: 23,
-    saves: 67,
-    tips: 28,
-    isLiked: true,
-    isSaved: false,
-    type: "video" as const,
+    id: "2",
+    type: "post",
+    title: "New Rap Lyrics",
+    author: "@mc_stan_fan",
+    thumbnail: "https://picsum.photos/seed/rap2/200/300",
   },
   {
-    id: 3,
-    username: "@ChefMaster",
-    caption: "Cooking up something special! 🍳",
-    musicName: "Cooking Vibes - ChefMaster",
-    video: null,
-    image: require("@assets/images/trending_reel3.png"),
-    likes: 189,
-    comments: 32,
-    shares: 15,
-    saves: 89,
-    tips: 15,
-    isLiked: false,
-    isSaved: true,
-    type: "video" as const,
+    id: "3",
+    type: "reel",
+    title: "Beatbox freestyle",
+    author: "@beat_king",
+    thumbnail: "https://picsum.photos/seed/beat3/200/300",
   },
   {
-    id: 4,
-    username: "@ComedyKing",
-    caption: "Laugh out loud! 😂 #comedy",
-    musicName: "Funny Moments - ComedyKing",
-    video: null,
-    image: require("@assets/images/trending1.png"),
-    likes: 312,
-    comments: 67,
-    shares: 34,
-    saves: 123,
-    tips: 45,
-    isLiked: true,
-    isSaved: true,
-    type: "video" as const,
-  },
-  {
-    id: 5,
-    username: "@MusicStar",
-    caption: "New track dropping soon! 🎵",
-    musicName: "Original Sound - MusicStar",
-    video: null,
-    image: require("@assets/images/trending2.png"),
-    likes: 445,
-    comments: 89,
-    shares: 56,
-    saves: 156,
-    tips: 67,
-    isLiked: false,
-    isSaved: false,
-    type: "video" as const,
-  },
-  {
-    id: 6,
-    username: "@ArtistLife",
-    caption: "Creating art every day! 🎨",
-    musicName: "Artistic Vibes - ArtistLife",
-    video: null,
-    image: require("@assets/images/trending3.png"),
-    likes: 278,
-    comments: 54,
-    shares: 28,
-    saves: 98,
-    tips: 34,
-    isLiked: true,
-    isSaved: false,
-    type: "video" as const,
+    id: "4",
+    type: "reel",
+    title: "Gully Cricket Moments",
+    author: "@sports_gully",
+    thumbnail: "https://picsum.photos/seed/cricket4/200/300",
   },
 ];
 
 export default function SavedScreen() {
-  const [selectedReelIndex, setSelectedReelIndex] = useState<number | null>(null);
-  const [showReelViewer, setShowReelViewer] = useState(false);
+  const [activeTab, setActiveTab] = useState<"all" | "reel" | "post">("all");
 
-  const handleReelPress = (index: number) => {
-    setSelectedReelIndex(index);
-    setShowReelViewer(true);
-  };
-
-  const handleCloseReelViewer = () => {
-    setShowReelViewer(false);
-    setSelectedReelIndex(null);
-  };
-
-  const renderReelItem = ({ item, index }: { item: (typeof savedReels)[0]; index: number }) => {
-    const itemWidth = (width - 60) / 2; // 2 columns with padding
-
-    return (
-      <TouchableOpacity
-        style={[styles.reelItem, { width: itemWidth }]}
-        onPress={() => handleReelPress(index)}
-        activeOpacity={0.8}
-      >
-        <Image source={item.image} style={styles.reelThumbnail} resizeMode="cover" />
-      </TouchableOpacity>
-    );
-  };
+  const filteredContent = savedContent.filter((item) => {
+    if (activeTab === "all") return true;
+    return item.type === activeTab;
+  });
 
   return (
     <View style={styles.container}>
@@ -152,49 +65,77 @@ export default function SavedScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <BackIcon />
+          <Ionicons name="chevron-back" size={28} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Saved Posts / Reels</Text>
+        <Text style={styles.headerTitle}>Saved Content</Text>
         <View style={styles.backButton} />
       </View>
 
-      {savedReels.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Svg width={80} height={80} viewBox="0 0 24 24" fill="none">
-            <Path
-              d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"
-              stroke="#666"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </Svg>
-          <Text style={styles.emptyText}>No saved items yet</Text>
-          <Text style={styles.emptySubtext}>Saved reels will appear here</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={savedReels}
-          renderItem={renderReelItem}
-          keyExtractor={(item) => item.id.toString()}
-          numColumns={2}
-          contentContainerStyle={styles.listContent}
-          columnWrapperStyle={styles.row}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+      {/* Filter Tabs */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity 
+          style={[styles.tab, activeTab === "all" && styles.activeTab]} 
+          onPress={() => setActiveTab("all")}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.tabText, activeTab === "all" && styles.activeTabText]}>All</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[styles.tab, activeTab === "reel" && styles.activeTab]} 
+          onPress={() => setActiveTab("reel")}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.tabText, activeTab === "reel" && styles.activeTabText]}>Reels</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[styles.tab, activeTab === "post" && styles.activeTab]} 
+          onPress={() => setActiveTab("post")}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.tabText, activeTab === "post" && styles.activeTabText]}>Posts</Text>
+        </TouchableOpacity>
+      </View>
 
-      {/* Reel Viewer Modal */}
-      {showReelViewer && selectedReelIndex !== null && (
-        <ReelViewer
-          visible={showReelViewer}
-          reels={savedReels}
-          initialIndex={selectedReelIndex}
-          onClose={handleCloseReelViewer}
-          hasBottomNav={false}
-          insets={{ top: 0, bottom: 0, left: 0, right: 0 }}
-        />
-      )}
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        
+        {filteredContent.length > 0 ? (
+          <View style={styles.gridContainer}>
+            {filteredContent.map((item) => (
+              <TouchableOpacity key={item.id} style={styles.card} activeOpacity={0.8}>
+                <Image source={{ uri: item.thumbnail }} style={styles.thumbnail} />
+                
+                {/* Content Type Icon (Top Right) */}
+                <View style={styles.typeBadge}>
+                  <Ionicons 
+                    name={item.type === 'reel' ? 'play-circle' : 'image'} 
+                    size={16} 
+                    color="#fff" 
+                  />
+                </View>
+
+                {/* Info Overlay (Bottom) */}
+                <View style={styles.infoOverlay}>
+                  <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
+                  <Text style={styles.itemAuthor} numberOfLines={1}>{item.author}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="bookmark-outline" size={48} color="#EC9A15" />
+            </View>
+            <Text style={styles.emptyStateTitle}>No Saved Items</Text>
+            <Text style={styles.emptyStateDesc}>
+              Jab aapko koi post ya reel pasand aaye, toh uspar bookmark icon dabayein, woh yahan save ho jayegi.
+            </Text>
+          </View>
+        )}
+
+      </ScrollView>
     </View>
   );
 }
@@ -221,43 +162,114 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: "#fff",
-    fontSize: 20,
+    fontSize: 22,
+    fontWeight: "700",
+    letterSpacing: 0.5,
   },
-  listContent: {
-    padding: 20,
+  tabContainer: {
+    flexDirection: "row",
+    paddingHorizontal: 20,
+    marginBottom: 20,
+    gap: 12,
+  },
+  tab: {
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    backgroundColor: "#252525",
+    borderWidth: 1,
+    borderColor: "rgba(236, 154, 21, 0.2)",
+  },
+  activeTab: {
+    backgroundColor: "#EC9A15",
+    borderColor: "#EC9A15",
+  },
+  tabText: {
+    color: "#aaa",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  activeTabText: {
+    color: "#fff",
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
     paddingBottom: 40,
   },
-  row: {
+  gridContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
-    marginBottom: 20,
+    gap: 16,
   },
-  reelItem: {
-    aspectRatio: 9 / 16,
-    borderRadius: 12,
+  card: {
+    width: CARD_WIDTH,
+    height: CARD_WIDTH * 1.5,
+    borderRadius: 16,
     overflow: "hidden",
     backgroundColor: "#252525",
+    borderWidth: 1,
+    borderColor: "rgba(236, 154, 21, 0.15)",
   },
-  reelThumbnail: {
+  thumbnail: {
     width: "100%",
     height: "100%",
+    resizeMode: "cover",
   },
-  emptyContainer: {
-    flex: 1,
+  typeBadge: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    padding: 6,
+    borderRadius: 12,
+  },
+  infoOverlay: {
+    position: "absolute",
+    bottom: 0,
+    width: "100%",
+    padding: 12,
+    paddingTop: 24, // extra padding for gradient effect if we add one
+    backgroundColor: "rgba(0,0,0,0.7)",
+  },
+  itemTitle: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  itemAuthor: {
+    color: "#EC9A15",
+    fontSize: 11,
+    fontWeight: "500",
+  },
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+    paddingHorizontal: 20,
+  },
+  emptyIconCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: "rgba(236, 154, 21, 0.1)",
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 40,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: "rgba(236, 154, 21, 0.3)",
   },
-  emptyText: {
+  emptyStateTitle: {
     color: "#fff",
-    fontSize: 18,
-    fontWeight: "600",
-    marginTop: 20,
-    textAlign: "center",
+    fontSize: 20,
+    fontWeight: "700",
+    marginBottom: 12,
   },
-  emptySubtext: {
-    color: "#999",
+  emptyStateDesc: {
+    color: "#aaa",
     fontSize: 14,
-    marginTop: 8,
     textAlign: "center",
+    lineHeight: 22,
   },
 });

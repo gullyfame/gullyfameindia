@@ -57,6 +57,8 @@ const TextEditorModal: React.FC<TextEditorModalProps> = ({
   const [strokeWidth, setStrokeWidth] = useState(overlay?.strokeWidth || 0);
   const [x, setX] = useState(overlay?.x ?? 0.5);
   const [y, setY] = useState(overlay?.y ?? 0.5);
+  const [startTime, setStartTime] = useState(overlay?.startTime ?? 0);
+  const [endTime, setEndTime] = useState(overlay?.endTime ?? 5);
 
   // Reset state when overlay changes
   React.useEffect(() => {
@@ -73,6 +75,8 @@ const TextEditorModal: React.FC<TextEditorModalProps> = ({
       setStrokeWidth(overlay.strokeWidth || 0);
       setX(overlay.x ?? 0.5);
       setY(overlay.y ?? 0.5);
+      setStartTime(overlay.startTime ?? 0);
+      setEndTime(overlay.endTime ?? 5);
     } else {
       // Reset to defaults for new overlay
       setText('');
@@ -87,6 +91,8 @@ const TextEditorModal: React.FC<TextEditorModalProps> = ({
       setStrokeWidth(0);
       setX(0.5);
       setY(0.5);
+      setStartTime(0);
+      setEndTime(5);
     }
   }, [overlay]);
 
@@ -107,12 +113,13 @@ const TextEditorModal: React.FC<TextEditorModalProps> = ({
       textAlign,
       rotation,
       opacity,
-      startTime: overlay?.startTime,
-      endTime: overlay?.endTime,
+      startTime,
+      endTime,
       ...(backgroundColor ? { backgroundColor } : {}),
       ...(strokeColor && strokeWidth > 0 ? { strokeColor, strokeWidth } : {}),
     };
 
+    console.log(`📝 Text saved: "${text.trim()}" from ${startTime.toFixed(2)}s to ${endTime.toFixed(2)}s`);
     onSave(updatedOverlay);
     onClose();
   }, [
@@ -128,6 +135,8 @@ const TextEditorModal: React.FC<TextEditorModalProps> = ({
     opacity,
     strokeColor,
     strokeWidth,
+    startTime,
+    endTime,
     overlay,
     onSave,
     onClose,
@@ -450,6 +459,45 @@ const TextEditorModal: React.FC<TextEditorModalProps> = ({
             </View>
           </View>
 
+          {/* Duration (Start/End Time) */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Duration</Text>
+            <View style={styles.durationRow}>
+              <View style={styles.durationInputContainer}>
+                <Text style={styles.durationLabel}>Start (s)</Text>
+                <TextInput
+                  style={styles.durationInput}
+                  value={startTime.toFixed(2)}
+                  onChangeText={(text) => {
+                    const val = Math.max(0, parseFloat(text) || 0);
+                    setStartTime(val);
+                  }}
+                  keyboardType="decimal-pad"
+                  placeholder="0.00"
+                  placeholderTextColor="rgba(255, 255, 255, 0.3)"
+                />
+              </View>
+
+              <View style={styles.durationInputContainer}>
+                <Text style={styles.durationLabel}>End (s)</Text>
+                <TextInput
+                  style={styles.durationInput}
+                  value={endTime.toFixed(2)}
+                  onChangeText={(text) => {
+                    const val = Math.max(startTime, parseFloat(text) || startTime);
+                    setEndTime(val);
+                  }}
+                  keyboardType="decimal-pad"
+                  placeholder="5.00"
+                  placeholderTextColor="rgba(255, 255, 255, 0.3)"
+                />
+              </View>
+            </View>
+            <Text style={styles.durationDisplay}>
+              Duration: {(endTime - startTime).toFixed(2)}s
+            </Text>
+          </View>
+
           {/* Delete Button */}
           {overlay && onDelete && (
             <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
@@ -686,6 +734,37 @@ const styles = StyleSheet.create({
     borderColor: '#ec9a15',
     transform: [{ scale: 1.2 }],
   },
+  durationRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  durationInputContainer: {
+    flex: 1,
+  },
+  durationLabel: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  durationInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(236, 154, 21, 0.3)',
+    color: '#ffffff',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  durationDisplay: {
+    color: '#ec9a15',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 8,
+  },
   deleteButton: {
     marginTop: 32,
     marginBottom: 32,
@@ -703,5 +782,6 @@ const styles = StyleSheet.create({
   },
 });
 
+export { TextEditorModal };
 export default TextEditorModal;
 

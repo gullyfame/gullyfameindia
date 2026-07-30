@@ -58,11 +58,11 @@ export default function AllCompetitionsScreen({ navigation }: any) {
 
       if (result.success && result.data) {
         if (pageNum === 1) {
-          setCompetitions(result.data);
+          setCompetitions(result.data.items as any);
         } else {
-          setCompetitions([...competitions, ...result.data]);
+          setCompetitions([...competitions, ...(result.data.items as any)]);
         }
-        setHasMore(result.data.length > 0);
+        setHasMore(result.data.items.length > 0);
       } else {
         Alert.alert('Error', result.error || 'Failed to load competitions');
       }

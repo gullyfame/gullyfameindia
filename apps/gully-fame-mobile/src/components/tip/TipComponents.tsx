@@ -144,7 +144,7 @@ const SparkleAnimation = ({ visible }: { visible: boolean }) => {
 export const SuccessPopup = ({
   visible,
   onClose,
-  message = '🎉 Tip Sent Successfully!',
+  message = '🎉 Support Sent Successfully!', // Updated copy text
 }: {
   visible: boolean;
   onClose: () => void;
@@ -320,7 +320,7 @@ export const PaymentMethodSheet = ({
   );
 };
 
-// Main Tip Popup Component
+// Main Tip Popup Component (Serving as Support Component now)
 export const TipPopup = ({
   visible,
   onClose,
@@ -342,6 +342,10 @@ export const TipPopup = ({
   const [isLoading, setIsLoading] = useState(false);
   const [showInsufficientCoins, setShowInsufficientCoins] = useState(false);
 
+  // New States for Warning Modal
+  const [showWarning, setShowWarning] = useState(false);
+  const [dontShowAgain, setDontShowAgain] = useState(false);
+
   // Participant coin amounts
   const coinAmounts = [50, 100, 200];
   // Fan money amounts
@@ -360,6 +364,17 @@ export const TipPopup = ({
     loadUserRole();
   }, []);
 
+  // Check user preference for warning modal on mount
+  useEffect(() => {
+    const checkWarningPreference = async () => {
+      const isHidden = await AsyncStorage.getItem('hideSupportWarning');
+      if (isHidden === 'true') {
+        setDontShowAgain(true);
+      }
+    };
+    checkWarningPreference();
+  }, []);
+
   useEffect(() => {
     if (visible) {
       Animated.spring(slideAnim, {
@@ -374,6 +389,7 @@ export const TipPopup = ({
       setCustomAmount('');
       setShowPaymentMethod(false);
       setShowInsufficientCoins(false);
+      setShowWarning(false);
     }
   }, [visible]);
 
@@ -394,29 +410,48 @@ export const TipPopup = ({
     }
   };
 
+  // Intermediary Check function before finalizing support
   const handleConfirmTip = async () => {
     if (selectedAmount <= 0) return;
 
-    if (isParticipant) {
-      // Check coin balance
-      if (selectedAmount > coinBalance) {
-        setShowInsufficientCoins(true);
-        return;
-      }
+    if (isParticipant && selectedAmount > coinBalance) {
+      setShowInsufficientCoins(true);
+      return;
+    }
 
-      // Process coin tip
+    // Checking explicit storage value to respect "Do Not Show Again"
+    const hideWarning = await AsyncStorage.getItem('hideSupportWarning');
+    if (hideWarning === 'true') {
+      executeSupportAction();
+    } else {
+      setShowWarning(true);
+    }
+  };
+
+  // The actual execution wrapper logic
+  const executeSupportAction = () => {
+    if (isParticipant) {
       setIsLoading(true);
       setTimeout(() => {
         setIsLoading(false);
         setShowSuccess(true);
         onTipSuccess(selectedAmount);
-        // Update balance (dummy)
         setCoinBalance(coinBalance - selectedAmount);
       }, 1000);
     } else {
-      // Fan - show payment method
       setShowPaymentMethod(true);
     }
+  };
+
+  // Triggered when user confirms warning modal
+  const handleWarningAgree = async () => {
+    if (dontShowAgain) {
+      await AsyncStorage.setItem('hideSupportWarning', 'true');
+    } else {
+      await AsyncStorage.removeItem('hideSupportWarning');
+    }
+    setShowWarning(false);
+    executeSupportAction();
   };
 
   const handlePaymentContinue = (method: string) => {
@@ -436,13 +471,12 @@ export const TipPopup = ({
 
   const handleBuyCoins = () => {
     setShowInsufficientCoins(false);
-    // Navigate to coin purchase (dummy)
     Alert.alert('Buy Coins', 'Redirecting to coin purchase...');
   };
 
   return (
     <>
-      <Modal transparent visible={visible && !showPaymentMethod && !showSuccess} animationType="none" onRequestClose={onClose}>
+      <Modal transparent visible={visible && !showPaymentMethod && !showSuccess && !showWarning} animationType="none" onRequestClose={onClose}>
         <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
@@ -458,9 +492,9 @@ export const TipPopup = ({
               ]}
             >
               <View style={styles.bottomSheetHandle} />
-              <Text style={styles.bottomSheetTitle}>
-                {isParticipant ? 'Send a Tip' : 'Send a Tip'}
-              </Text>
+              
+              {/* Updated Copy Texts */}
+              <Text style={styles.bottomSheetTitle}>Show Your Support</Text>
 
               {isParticipant ? (
                 <>
@@ -552,6 +586,7 @@ export const TipPopup = ({
                 </>
               )}
 
+              {/* Updated Button Text to Confirm Support */}
               <TouchableOpacity
                 style={[
                   styles.confirmButton,
@@ -563,12 +598,44 @@ export const TipPopup = ({
                 {isLoading ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.confirmButtonText}>Confirm Tip</Text>
+                  <Text style={styles.confirmButtonText}>Confirm Support</Text>
                 )}
               </TouchableOpacity>
             </Animated.View>
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      {/* ⚠️ Added Dynamic Interstitial Warning Alert Modal with "Do not show again" checkbox */}
+      <Modal transparent visible={showWarning} animationType="fade" onRequestClose={() => setShowWarning(false)}>
+        <View style={styles.modalCenteredOverlay}>
+          <View style={styles.warningAlertBox}>
+            <Text style={styles.warningAlertTitle}>Confirm Action</Text>
+            <Text style={styles.warningAlertText}>
+              Are you sure you want to transfer {selectedAmount} {isParticipant ? 'coins' : 'INR'} to support this creator? This process cannot be reversed.
+            </Text>
+
+            <TouchableOpacity 
+              activeOpacity={0.8}
+              onPress={() => setDontShowAgain(!dontShowAgain)} 
+              style={styles.checkboxRow}
+            >
+              <View style={[styles.checkboxOutline, dontShowAgain && styles.checkboxChecked]}>
+                {dontShowAgain && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+              <Text style={styles.checkboxLabel}>Do not show this again</Text>
+            </TouchableOpacity>
+
+            <View style={styles.warningActionsRow}>
+              <TouchableOpacity style={styles.warningCancelBtn} onPress={() => setShowWarning(false)}>
+                <Text style={styles.warningCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.warningAgreeBtn} onPress={handleWarningAgree}>
+                <Text style={styles.warningAgreeText}>Agree & Proceed</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
 
       {/* Insufficient Coins Popup */}
@@ -616,6 +683,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
+  },
+  modalCenteredOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   bottomSheet: {
     backgroundColor: '#1a1a1a',
@@ -939,5 +1012,79 @@ const styles = StyleSheet.create({
   sparkleText: {
     fontSize: getFontSize(24),
   },
+  
+  // Warning Box Custom Styles
+  warningAlertBox: {
+    backgroundColor: '#1a1a1a',
+    width: wp(85),
+    borderRadius: scale(16),
+    padding: scale(20),
+    borderWidth: scale(1),
+    borderColor: '#333',
+  },
+  warningAlertTitle: {
+    fontSize: getFontSize(18),
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: scale(12),
+  },
+  warningAlertText: {
+    fontSize: getFontSize(14),
+    color: '#bbb',
+    lineHeight: scale(20),
+    marginBottom: scale(16),
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: scale(20),
+    gap: scale(8),
+  },
+  checkboxOutline: {
+    width: scale(20),
+    height: scale(20),
+    borderRadius: scale(4),
+    borderWidth: scale(1.5),
+    borderColor: '#EC9A15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#EC9A15',
+  },
+  checkmark: {
+    color: '#fff',
+    fontSize: getFontSize(12),
+    fontWeight: '700',
+  },
+  checkboxLabel: {
+    color: '#999',
+    fontSize: getFontSize(14),
+  },
+  warningActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: scale(12),
+  },
+  warningCancelBtn: {
+    paddingVertical: scale(10),
+    paddingHorizontal: scale(16),
+    borderRadius: scale(8),
+  },
+  warningCancelText: {
+    color: '#999',
+    fontSize: getFontSize(14),
+    fontWeight: '600',
+  },
+  warningAgreeBtn: {
+    backgroundColor: '#EC9A15',
+    paddingVertical: scale(10),
+    paddingHorizontal: scale(16),
+    borderRadius: scale(8),
+  },
+  warningAgreeText: {
+    color: '#fff',
+    fontSize: getFontSize(14),
+    fontWeight: '700',
+  },
 });
-

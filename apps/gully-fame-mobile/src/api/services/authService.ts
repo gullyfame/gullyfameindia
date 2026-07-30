@@ -9,6 +9,7 @@ export interface RegisterRequest {
   email: string;
   password: string;
   role: "participants" | "fan";
+  referralCode?: string;
 }
 
 export interface RegisterResponse {

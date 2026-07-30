@@ -132,6 +132,19 @@ export const API_ENDPOINTS = {
     GET_STATUS: "video-editor/status/:id",
   },
 
+  // Music Library Endpoints (public audio for video editor)
+  MUSIC_LIBRARY: {
+    LIST_AUDIO: "public/audio",
+    LIST_FILTERS: "public/filters",
+    LIST_STICKERS: "public/stickers",
+  },
+
+  // User Audio Endpoints (save/unsave tracks)
+  AUDIO: {
+    TOGGLE_SAVE: "user/audio/:audioId/save",
+    GET_SAVED: "user/audio/saved",
+  },
+
   // CMS Endpoints
   CMS: {
     GET_PAGES: "cms/pages",

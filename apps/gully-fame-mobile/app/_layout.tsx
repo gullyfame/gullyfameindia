@@ -1,12 +1,7 @@
+// File Route: apps/gully-fame-mobile/app/_layout.tsx
+
 import { Stack } from "expo-router";
-// ThemeProvider removed - not needed for expo-router
-// import {
-//   ThemeProvider,
-//   DarkTheme,
-//   DefaultTheme,
-// } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
-// import { useColorScheme } from "react-native"; // Not needed without ThemeProvider
 import { useEffect } from "react";
 import * as SplashScreen from "expo-splash-screen";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -32,15 +27,10 @@ import {
     Inter_700Bold,
 } from "@expo-google-fonts/inter";
 import { UserRoleProvider } from "@/contexts/UserRoleContext";
-// Side-effect imports moved to prevent bundling issues
-// import '../src/api/check-dev-mode';
-// import '../src/api/axios';
-// import '../src/api/test-api';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-    // const colorScheme = useColorScheme(); // Not used after removing ThemeProvider
 
     const [fontsLoaded, fontError] = useFonts({
         Rubik_400Regular,
@@ -74,7 +64,15 @@ export default function RootLayout() {
         <UserRoleProvider>
             <BrandingProvider>
                 <GestureHandlerRootView style={{ flex: 1 }}>
-                    <Stack>
+                    <Stack
+                        screenOptions={{
+                            headerShown: false,
+                            // ✅ FIX 1: Pure navigation layout background ko dark brown kiya
+                            contentStyle: { backgroundColor: "#3C2610" },
+                            // ✅ FIX 2: Global soft fade animation transition apply kiya (Blinking strict zero)
+                            animation: "fade",
+                        }}
+                    >
                         <Stack.Screen
                             name="index"
                             options={{ headerShown: false }}
@@ -92,7 +90,8 @@ export default function RootLayout() {
                             options={{ headerShown: false }}
                         />
                     </Stack>
-                    <StatusBar style="auto" />
+                    {/* ✅ FIX 3: StatusBar ko light content mode me lock kiya */}
+                    <StatusBar style="light" backgroundColor="#3C2610" translucent={false} />
                 </GestureHandlerRootView>
             </BrandingProvider>
         </UserRoleProvider>

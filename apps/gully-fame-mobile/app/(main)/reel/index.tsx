@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import { File, Paths } from "expo-file-system";
 import * as MediaLibrary from "expo-media-library";
 import { Asset } from "expo-asset";
-import { FFmpegKit, ReturnCode } from "ffmpeg-kit-react-native-community";
 import {
   View,
   Text,
@@ -24,6 +23,21 @@ import {
   Alert,
   ViewToken,
 } from "react-native";
+
+// Conditional FFmpeg import - only available in development builds
+let FFmpegKit: any = null;
+let ReturnCode: any = null;
+let isFFmpegAvailable = false;
+
+try {
+  const ffmpeg = require("ffmpeg-kit-react-native-community");
+  FFmpegKit = ffmpeg.FFmpegKit;
+  ReturnCode = ffmpeg.ReturnCode;
+  isFFmpegAvailable = true;
+} catch (e) {
+  console.warn("FFmpeg not available in reel index - watermarking will fail gracefully in Expo Go");
+  isFFmpegAvailable = false;
+}
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Video, ResizeMode, Audio } from "expo-av";
 import Svg, { Path } from "react-native-svg";
@@ -406,6 +420,19 @@ export default function GullyReelScreen() {
   const executeDownloadWithWatermark = async (reelData: any) => {
     setIsDownloading(true);
     try {
+      // Check if FFmpeg is available for watermarking
+      if (!isFFmpegAvailable) {
+        Alert.alert(
+          "Feature Not Available",
+          "Video watermarking requires a development build with FFmpeg. " +
+          "In Expo Go, you can only download videos without watermarks. " +
+          "To get full functionality, create a development build: eas build --platform android --profile preview"
+        );
+        setIsDownloading(false);
+        setDownloadModalVisible(false);
+        return;
+      }
+
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== "granted") {
         Alert.alert("Permission Denied", "We need access to save the video.");
@@ -962,7 +989,7 @@ export default function GullyReelScreen() {
                     }}
                   >
                     <CoinIcon size={16} color="#fff" />
-                    <Text style={styles.tipButtonText}>Tip</Text>
+                    <Text style={styles.tipButtonText}>Support</Text>
                   </TouchableOpacity>
                 </View>
 

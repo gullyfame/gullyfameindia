@@ -57,7 +57,7 @@ export default function CommentsScreen({ route, navigation }: CommentsScreenProp
         if (pageNum === 1) {
           setComments(response.data.items);
         } else {
-          setComments((prev) => [...prev, ...response.data.items]);
+          setComments((prev) => [...prev, ...response.data!.items]);
         }
 
         setPage(pageNum);
