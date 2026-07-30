@@ -25,12 +25,12 @@ export default function SplashScreen() {
         console.log("[SplashScreen] Initial fetch result:", result);
 
         if (result.success && result.data) {
-          // TypeScript error fixed here using 'as any'
           const images = (result.data as any).splashScreens || (result.data as any).images || [];
 
           console.log("[SplashScreen] Initial fetch - Images from API:", images);
 
-          const baseImages = [
+          // Type definition added here
+          const baseImages: Array<{ id: number; url: string | null; file: File | null }> = [
             { id: 1, url: null, file: null },
             { id: 2, url: null, file: null },
             { id: 3, url: null, file: null },
@@ -94,9 +94,10 @@ export default function SplashScreen() {
             try {
               const result = await getSplash();
               if (result.success && result.data) {
-                // TypeScript error fixed here using 'as any'
                 const images = (result.data as any).splashScreens || (result.data as any).images || [];
-                const baseImages = [
+                
+                // Type definition added here
+                const baseImages: Array<{ id: number; url: string | null; file: File | null }> = [
                   { id: 1, url: null, file: null },
                   { id: 2, url: null, file: null },
                   { id: 3, url: null, file: null },
@@ -192,7 +193,6 @@ export default function SplashScreen() {
 
             if (filesToUpload.length > 0) {
               setIsUploading(true);
-              // Function name fixed here (uploadSplash instead of uploadSplashScreen)
               const result = await uploadSplash(filesToUpload);
               setIsUploading(false);
 
@@ -203,9 +203,10 @@ export default function SplashScreen() {
 
                 const refreshResult = await getSplash();
                 if (refreshResult.success && refreshResult.data) {
-                  // TypeScript error fixed here using 'as any'
                   const images = (refreshResult.data as any).images || [];
-                  const baseImages = [
+                  
+                  // Type definition added here
+                  const baseImages: Array<{ id: number; url: string | null; file: File | null }> = [
                     { id: 1, url: null, file: null },
                     { id: 2, url: null, file: null },
                     { id: 3, url: null, file: null },
