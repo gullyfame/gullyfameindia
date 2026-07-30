@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Layout, Upload, Save } from "lucide-react";
-import { uploadSplashScreen, getSplash } from "@/lib/brandingApi";
+import { uploadSplash, getSplash } from "@/lib/brandingApi";
 
 export default function SplashScreen() {
   const [splashImages, setSplashImages] = useState<
