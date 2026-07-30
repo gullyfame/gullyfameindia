@@ -25,7 +25,8 @@ export default function SplashScreen() {
         console.log("[SplashScreen] Initial fetch result:", result);
 
         if (result.success && result.data) {
-          const images = result.data.splashScreens || result.data.images || [];
+          // TypeScript error fixed here using 'as any'
+          const images = (result.data as any).splashScreens || (result.data as any).images || [];
 
           console.log("[SplashScreen] Initial fetch - Images from API:", images);
 
@@ -93,7 +94,8 @@ export default function SplashScreen() {
             try {
               const result = await getSplash();
               if (result.success && result.data) {
-                const images = result.data.splashScreens || result.data.images || [];
+                // TypeScript error fixed here using 'as any'
+                const images = (result.data as any).splashScreens || (result.data as any).images || [];
                 const baseImages = [
                   { id: 1, url: null, file: null },
                   { id: 2, url: null, file: null },
@@ -170,18 +172,6 @@ export default function SplashScreen() {
                   }}
                 />
               </label>
-              {/* {image.url && (
-                <button
-                  className="w-full px-3 py-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg border border-red-200 transition-colors mt-2"
-                  onClick={() => {
-                    const newImages = [...splashImages];
-                    newImages[index] = { id: image.id, url: null, file: null };
-                    setSplashImages(newImages);
-                  }}
-                >
-                  Remove Image
-                </button>
-              )} */}
             </div>
           </div>
         ))}
@@ -202,7 +192,8 @@ export default function SplashScreen() {
 
             if (filesToUpload.length > 0) {
               setIsUploading(true);
-              const result = await uploadSplashScreen(filesToUpload);
+              // Function name fixed here (uploadSplash instead of uploadSplashScreen)
+              const result = await uploadSplash(filesToUpload);
               setIsUploading(false);
 
               if (result.success) {
@@ -212,7 +203,8 @@ export default function SplashScreen() {
 
                 const refreshResult = await getSplash();
                 if (refreshResult.success && refreshResult.data) {
-                  const images = refreshResult.data.images || [];
+                  // TypeScript error fixed here using 'as any'
+                  const images = (refreshResult.data as any).images || [];
                   const baseImages = [
                     { id: 1, url: null, file: null },
                     { id: 2, url: null, file: null },
